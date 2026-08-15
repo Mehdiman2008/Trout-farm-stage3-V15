@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>داشبورد زنده مزرعه قزل‌آلا</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<link rel="stylesheet"
+      href="https://cdn.jsdelivr.net/gh/rastikerdar/vazirmatn@v33.003/Vazirmatn-font-face.css">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="logo"><span class="dot"></span> داشبورد زنده مزرعه قزل‌آلا</div>
+    <span class="asof" id="asof">در حال بارگذاری…</span>
+    <span class="badge neutral" id="stageBadge">مرحله ۱</span>
+    <div class="spacer"></div>
+    <button class="btn small" id="btnDemo">افزودن داده نمونه</button>
+    <button class="btn small" id="btnDemoClear">حذف داده نمونه</button>
+    <button class="btn small" id="btnBackup">پشتیبان‌گیری</button>
+    <button class="btn small primary" id="btnRefresh">به‌روزرسانی</button>
+  </div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="overview" class="active">نمای کلی</button>
+    <button data-tab="ponds">استخرها</button>
+    <button data-tab="cohorts">Cohorts</button>
+    <button data-tab="feed">خوراک و موجودی</button>
+    <button data-tab="txns">تراکنش‌ها</button>
+    <button data-tab="offers">آفرها</button>
+    <button data-tab="assumptions">فرضیات</button>
+    <button data-tab="plan">برنامه و اهداف</button>
+    <button data-tab="decide">موتور تصمیم</button>
+    <button data-tab="quality">کیفیت داده</button>
+    <button disabled title="در مرحله ۳ فعال می‌شود">موتور تصمیم ⏳</button>
+  </nav>
+</header>
+
+<main>
+  <!-- ==================================================== نمای کلی -->
+  <section id="tab-overview">
+    <div class="kpis" id="kpis"></div>
+
+    <div class="panel" id="warnPanel" style="display:none">
+      <h2>هشدارهای داده</h2>
+      <div class="sub">مواردی که تخمین را تحت تأثیر قرار می‌دهند و با ورود داده واقعی برطرف می‌شوند.</div>
+      <div id="warnList" class="checks"></div>
+    </div>
+
+    <div class="panel" id="reconPanel" style="display:none">
+      <h2>وضعیت reconciliation موجودی</h2>
+      <div id="reconBody"></div>
+    </div>
+
+    <div class="panel" id="pondAllocPanel" style="display:none">
+      <h2>تخصیص پیشنهادی استخر</h2>
+      <div class="sub">این cohortها از ۱ گرم عبور کرده‌اند و به grow-out pond نیاز
+        دارند، ولی هنوز استخر واقعی برایشان ثبت نشده. تخصیص زیر
+        <b>پیشنهادی</b> است و تا تأیید شما Actual نمی‌شود.</div>
+      <div id="pondAllocBody"></div>
+    </div>
+
+    <div class="panel" id="unassignedPanel" style="display:none">
+      <h2>فروش‌های تاریخی بدون cohort</h2>
+      <div class="sub">این فروش‌ها واقعی و ثبت‌شده‌اند ولی cohort مبدأ آن‌ها مشخص نیست.
+        سیستم از روی <b>وزن فروخته‌شده</b> محتمل‌ترین cohort را پیشنهاد می‌دهد؛
+        تصمیم نهایی با شماست و هر زمان قابل تغییر است.
+        تا وقتی تخصیص انجام نشود، درآمد در دفتر نقدی هست ولی موجودی cohortها
+        کاهش نیافته است.</div>
+      <table id="unassignedTable"></table>
+    </div>
+
+    <div class="panel">
+      <h2>شماتیک ۲۱ استخر</h2>
+      <div class="sub">با کلیک روی هر استخر، جزئیات و تاریخچه باز می‌شود.</div>
+      <div class="pond-grid" id="pondGridMini"></div>
+      <div class="legend" id="legend"></div>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h2>پیش‌بینی فشار ظرفیت استخر</h2>
+        <div class="sub" id="capSub"></div>
+        <svg class="chart" id="capChart" viewBox="0 0 760 240" preserveAspectRatio="xMidYMid meet"></svg>
+        <div id="capPoints" class="row" style="margin-top:8px"></div>
+      </div>
+      <div class="panel">
+        <h2>بنچمارک سه‌ماهه سرمایه / دلار</h2>
+        <div class="sub">فقط شاخص هزینه فرصت؛ جایگزین NPV یا سود عملیاتی نیست.</div>
+        <div id="fxBox"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Timeline کوهورت‌ها تا ۱۵ گرم</h2>
+      <div class="sub">میله باریک = بازه گروه کندرشد تا تندرشد؛ نشانه‌ها = رسیدن به ۱، ۲، ۵، ۱۰ و ۱۵ گرم.</div>
+      <svg class="chart" id="timeline" viewBox="0 0 900 260" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h2>milestoneهای پیش‌رو</h2>
+        <div class="sub">تخمینی — بر پایه منحنی رشد و آخرین داده واقعی هر cohort.</div>
+        <div class="scroll"><table id="msTable"></table></div>
+      </div>
+      <div class="panel">
+        <h2>خلاصه نقدی و سرمایه در گردش</h2>
+        <div class="sub">دفتر نقدی واقعی از روی تراکنش‌ها ساخته می‌شود (Fix 4).</div>
+        <table id="cashTable"></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ====================================================== استخرها -->
+  <section id="tab-ponds" class="hidden">
+    <div class="panel">
+      <div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:10px">
+        <div>
+          <h2 style="margin-bottom:2px">وضعیت زنده استخرها</h2>
+          <div class="sub" id="pondSub"></div>
+        </div>
+        <div class="row" style="gap:6px;flex-wrap:wrap">
+          <select id="pondDateSel" class="pill" style="cursor:pointer">
+            <option value="0">امروز</option>
+            <option value="30">+۳۰ روز</option>
+            <option value="60">+۶۰ روز</option>
+            <option value="90">+۹۰ روز</option>
+            <option value="custom">تاریخ دلخواه…</option>
+          </select>
+          <input id="pondDateCustom" type="date" class="pill" style="display:none">
+          <button class="btn small" id="btnPondOptimize">بهینه‌سازی چیدمان استخر</button>
+          <button class="btn small ghost" id="btnPondRestore">بازگردانی چیدمان قبلی</button>
+        </div>
+      </div>
+      <div id="pondForecastBanner" class="note info hidden" style="margin-top:10px"></div>
+      <div class="pond-grid" id="pondGrid" style="margin-top:12px"></div>
+      <div class="legend" id="legend2"></div>
+      <div id="pondPlannedNote" class="tiny muted hidden" style="margin-top:8px">
+        استخرهای <b>«رزرو آینده»</b> صرفاً پیش‌بینی‌اند و هیچ تخصیص واقعی نیستند؛
+        فقط وقتی cohort واقعاً از تراف عبور کند، تخصیص واقعی ثبت می‌شود.
+      </div>
+    </div>
+  </section>
+
+
+
+  <!-- ======================================================= cohorts -->
+  <section id="tab-cohorts" class="hidden">
+    <div class="panel">
+      <h2>کوهورت‌های فعال</h2>
+      <div class="sub">هر ردیف نشان می‌دهد مبنای عدد Actual است یا Estimated.</div>
+      <div class="scroll"><table id="cohortTable"></table></div>
+    </div>
+    <div class="panel">
+      <h2>پراکندگی وزن داخل هر cohort</h2>
+      <div class="sub">میله = بازه کندرشد (P10) تا تندرشد (P90)؛ خط وسط = میانه.</div>
+      <div id="distList" class="grid"></div>
+    </div>
+  </section>
+
+  <!-- ========================================================== خوراک -->
+  <section id="tab-feed" class="hidden">
+    <div class="panel">
+      <h2>موجودی خوراک</h2>
+      <div class="sub">بهای تمام‌شده به روش میانگین موزون خرید محاسبه می‌شود.</div>
+      <table id="feedTable"></table>
+    </div>
+    <div class="panel">
+      <h2>نیاز خوراک ۹۰ روز آینده</h2>
+      <div class="sub">تخمینی — بر اساس رشد مورد انتظار cohortهای فعلی و FCR پایه.</div>
+      <table id="feedOutlook"></table>
+    </div>
+  </section>
+
+  <!-- ==================================================== تراکنش‌ها -->
+  <section id="tab-txns" class="hidden">
+    <div class="panel">
+      <h2>ثبت رویداد جدید</h2>
+      <div class="sub">هر رویداد در تاریخچه append می‌شود؛ هیچ رکوردی overwrite نمی‌شود.</div>
+      <div class="form-grid" id="txnForm"></div>
+      <div id="txnResult"></div>
+      <div class="row" style="margin-top:11px">
+        <button class="btn primary" id="btnAddTxn">ثبت رویداد</button>
+        <span class="muted small" id="txnHint"></span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>تاریخچه تراکنش‌ها</h2>
+      <div class="sub">اصلاح یک رکورد، نسخه جدید می‌سازد و نسخه قبلی با برچسب «اصلاح‌شده» باقی می‌ماند.</div>
+      <div class="scroll"><table id="txnTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ========================================================== آفرها -->
+  <section id="tab-offers" class="hidden">
+    <div class="panel">
+      <h2>ثبت Offer خرید تخم</h2>
+      <div class="sub">معماری Offer-Based (Fix 1): آفر ثبت می‌شود، سپس پذیرش/رد/پذیرش جزئی. آفر رد شده هم حفظ می‌شود.</div>
+      <div class="form-grid" id="offerForm"></div>
+      <div class="row" style="margin-top:11px">
+        <button class="btn primary" id="btnAddOffer">ثبت آفر</button>
+        <span class="muted small">ارزیابی اقتصادی آفر در مرحله ۳ اضافه می‌شود.</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>آفرهای ثبت‌شده</h2>
+      <div class="scroll"><table id="offerTable"></table></div>
+    </div>
+  </section>
+
+  <!-- ======================================================= فرضیات -->
+  <section id="tab-assumptions" class="hidden">
+    <div class="panel">
+      <div class="row">
+        <div style="flex:1">
+          <h2>فرضیات و پارامترها</h2>
+          <div class="sub">تغییر هر مقدار، forecast و تخمین‌ها را بازمحاسبه می‌کند ولی داده تاریخی واقعی را تغییر نمی‌دهد.</div>
+        </div>
+        <button class="btn" id="btnResetAll">بازگشت همه به پیش‌فرض</button>
+      </div>
+      <div class="row" style="margin-bottom:10px">
+        <span class="badge obs">OBS</span><span class="small muted">داده واقعی مزرعه</span>
+        <span class="badge ma">MA</span><span class="small muted">فرض مدل</span>
+        <span class="badge der">DER</span><span class="small muted">محاسبه‌شده</span>
+      </div>
+      <div id="assumeList"></div>
+    </div>
+  </section>
+
+  <!-- ================================================ برنامه و اهداف -->
+  <section id="tab-plan" class="hidden">
+    <div class="panel">
+      <div class="row">
+        <div style="flex:1">
+          <h2>Rolling Plan — برنامه غلتان ۱۲ ماهه</h2>
+          <div class="sub">برنامه از وضعیت واقعی همین لحظه ساخته می‌شود، نه از یک
+            baseline ثابت. با ورود هر داده واقعی دوباره بهینه می‌شود.</div>
+        </div>
+        <div class="row" id="variantPicker"></div>
+        <button class="btn" id="btnPlanRun">محاسبه دوباره</button>
+      </div>
+      <div id="planMeta" class="tiny muted" style="margin-top:8px"></div>
+      <div class="kpis" id="planKpis" style="margin-top:12px"></div>
+      <div id="planFlags" class="checks" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel" id="manualMixPanel">
+      <div class="row">
+        <div style="flex:1">
+          <h2>Manual Sales Mix Comparison</h2>
+          <div class="sub">ترکیب دستیِ فروش را وارد کنید تا با همان موتور شبیه‌سازی
+            (رشد، تلفات، هزینه خوراک، سهولت فروش، سقف تقاضا، ظرفیت استخر، سرمایه
+            در گردش، زمان‌بندی پرداخت) ارزش‌گذاری و با برنامه بهینه مقایسه شود.
+            خرید تخم دقیقاً از برنامه بهینه گرفته می‌شود و تغییر نمی‌کند — فقط
+            نحوهٔ فروش جمعیت موجود بازتوزیع می‌شود.</div>
+          <div class="note warn" style="margin-top:8px">
+            <b>ورودی = وزن هدفِ برداشت، نه وزن نهایی فروش</b>
+            <div class="tiny" style="margin-top:4px">تنها اهرمی که در اختیار شماست
+              «هدف‌گذاری» است: یک cohort را برای برداشت در چه وزنی برنامه‌ریزی کنیم.
+              وزن <b>نهایی</b> فروش یک خروجی است، نه ورودی — چون ماهیِ فروش‌نرفته در
+              تلاش اول، در carry-over به رشدش ادامه می‌دهد و ممکن است در بازهٔ
+              سنگین‌تری فروخته شود. برای همین کارت «فروش برنامه» بالا (که وزن
+              <b>واقعی</b> فروش را نشان می‌دهد) با این ورودی‌ها یکی نیست و نباید
+              مستقیم اینجا کپی شود. پس از محاسبه، ترکیب واقعی حاصل در جدول پایین
+              نمایش داده می‌شود.</div>
+          </div>
+        </div>
+      </div>
+      <div class="form-grid" id="manualMixInputs"></div>
+      <div class="tiny muted" id="manualMixTotal" style="margin-top:4px"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="btnManualMixRun">محاسبه سناریوی دستی</button>
+        <button class="btn" id="btnManualMixReset">بازنشانی به ترکیب بهینه</button>
+      </div>
+      <div id="manualMixWarnings" class="checks" style="margin-top:10px"></div>
+      <div class="kpis" id="manualMixKpis" style="margin-top:12px"></div>
+      <div id="manualMixActual" style="margin-top:12px"></div>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h2>نتیجه غلتان ۱۲ ماهه</h2>
+        <div class="sub">فقط جریان‌های اقتصادی ۱۲ ماه آینده — این عدد «سود سالانه» است.</div>
+        <table id="horizon12Table"></table>
+      </div>
+      <div class="panel">
+        <h2>ارزش کل چرخه عمر برنامه ۱۲ ماهه</h2>
+        <div class="sub">شامل cohortهایی که خریدشان امسال است ولی برداشتشان به سال
+          بعد می‌افتد. این عدد سود سالانه <b>نیست</b>.</div>
+        <table id="horizonLifeTable"></table>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>دفتر نقدی برنامه‌ریزی‌شده</h2>
+      <div class="sub" id="cashSub"></div>
+      <div class="scroll" style="max-height:340px"><table id="planCashTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <h2>برنامه اقدام ۹۰ روز آینده</h2>
+      <div class="sub" id="plan90Sub"></div>
+      <div class="scroll" style="max-height:340px"><table id="plan90Table"></table></div>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h2>نیاز ظرفیت استخر در برنامه</h2>
+        <div class="sub">خط پیوسته = برنامه پایه · خط‌چین = سناریوی نامساعد ·
+          خط افقی = ۱۹ استخر عملیاتی.</div>
+        <svg class="chart" id="planCapChart" viewBox="0 0 760 240"
+             preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel">
+        <h2>بنچمارک سه‌ماهه سرمایه در برابر دلار</h2>
+        <div class="sub">فقط شاخص ارزش زمانی سرمایه؛ جایگزین NPV یا سود عملیاتی نیست.
+          دوره‌های بدون داده واقعی نرخ دلار «موجود نیست» علامت می‌خورند.</div>
+        <div class="scroll" style="max-height:300px"><table id="planFxTable"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>برنامه ماهانه</h2>
+      <div class="sub">هدف‌های هر ماه تقویمی — خرید، فروش، خوراک، ظرفیت، سرمایه و حاشیه.</div>
+      <div class="scroll"><table id="planMonthlyTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <h2>برنامه سه‌ماهه</h2>
+      <div class="scroll"><table id="planQuarterlyTable"></table></div>
+    </div>
+
+    <div class="panel">
+      <h2>Target vs Actual</h2>
+      <div class="sub">برنامه پایه در برابر برنامه بازبهینه‌شده و عملکرد واقعی.
+        ستون واقعی فقط از تراکنش‌های ثبت‌شده می‌آید.</div>
+      <div class="row" style="margin:8px 0">
+        <button class="btn primary" id="btnSaveBaseline">ثبت این برنامه به‌عنوان برنامه پایه</button>
+        <span class="muted small" id="baselineInfo"></span>
+      </div>
+      <div class="scroll"><table id="varianceTable"></table></div>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h2>تصمیم برداشت هر cohort</h2>
+        <div class="sub">بهینه‌ساز تعیین می‌کند کدام cohort، چه سهمی و در چه وزنی
+          برداشت شود (Fix 3) — نه یک قاعده سرانگشتی.</div>
+        <table id="cohortDecisionTable"></table>
+      </div>
+      <div class="panel">
+        <h2>پراکندگی رشد و grading</h2>
+        <div class="sub">هر cohort در یک روز به وزن هدف نمی‌رسد؛ برداشت در سه موج
+          کندرشد / معمول / تندرشد انجام می‌شود.</div>
+        <table id="gradingTable"></table>
+      </div>
+    </div>
+
+    <div class="two">
+      <div class="panel">
+        <h2>سه حالت مدیریتی</h2>
+        <div class="sub">بیشینه سود / متعادل / محافظه‌کارانه — هر سه با همان داده واقعی.</div>
+        <button class="btn" id="btnVariants">مقایسه سه حالت</button>
+        <div class="scroll" style="margin-top:10px"><table id="variantTable"></table></div>
+      </div>
+      <div class="panel">
+        <h2>سناریوهای حجم سالانه تخم</h2>
+        <div class="sub">۲.۰M / ۲.۵M / ۳.۰M — عرضه واقعی ماهانه همچنان محدودکننده است.</div>
+        <button class="btn" id="btnScenarios">مقایسه سناریوها</button>
+        <div class="scroll" style="margin-top:10px"><table id="scenarioTable"></table></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>بررسی‌های کیفیت برنامه</h2>
+      <div class="checks" id="planChecks"></div>
+    </div>
+  </section>
+
+  <!-- ================================================== موتور تصمیم -->
+  <section id="tab-decide" class="hidden">
+    <div class="panel">
+      <h2>موتور تصمیم خرید و فروش</h2>
+      <div class="sub">هر تصمیم از وضعیت واقعی مزرعه در همین لحظه ساخته می‌شود،
+        نه از یک baseline ثابت. با تغییر موجودی، استخرها یا نقدینگی، جواب همان
+        آفر هم عوض می‌شود.</div>
+      <div class="kpis" id="decideContext" style="margin-top:10px"></div>
+    </div>
+
+    <div class="panel">
+      <div class="row"><h2 style="flex:1">آفر خرید تخم</h2></div>
+      <div class="form-grid">
+        <div class="field"><label>تاریخ تحویل</label>
+          <input id="eo_date" type="date"></div>
+        <div class="field"><label>تعداد تخم <span style="color:var(--bad)">*</span></label>
+          <input id="eo_qty" type="number" step="1000" placeholder="مثلاً ۱۶۰۰۰۰"></div>
+        <div class="field"><label>قیمت هر تخم (تومان) <span style="color:var(--bad)">*</span></label>
+          <input id="eo_price" type="number" step="any" placeholder="مثلاً ۶۷۰۰"></div>
+        <div class="field"><label>تأمین‌کننده</label><input id="eo_supplier"></div>
+        <div class="field"><label>اعتبار آفر تا</label>
+          <input id="eo_expiry" type="date"></div>
+        <div class="field"><label>کیفیت / اطمینان تأمین‌کننده</label>
+          <select id="eo_quality"><option value="">—</option>
+            <option>بالا</option><option>متوسط</option><option>پایین</option></select></div>
+        <div class="field"><label>سهم پرداخت نقدی به تأمین‌کننده</label>
+          <input id="eo_upfront" type="number" step="0.05" placeholder="۱٫۰ = تمام‌نقد"></div>
+        <div class="field"><label>اعتبار تأمین‌کننده (روز)</label>
+          <input id="eo_credit" type="number" step="1" placeholder="مثلاً ۶۰"></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="btnEggDecide">ارزیابی آفر</button>
+        <label class="muted small"><input type="checkbox" id="eo_partial" checked>
+          گزینه‌های خرید جزئی هم بررسی شود</label>
+      </div>
+      <div id="eggResult"></div>
+    </div>
+
+    <div class="panel">
+      <div class="row"><h2 style="flex:1">آفر فروش ماهی</h2></div>
+      <div class="form-grid">
+        <div class="field"><label>Cohort</label>
+          <select id="so_cohort"></select>
+          <div class="tiny muted">«خودکار (چند cohort)» یعنی سیستم از روی توزیع
+            وزن، بهترین ترکیب cohortها را پیشنهاد می‌دهد و شما می‌توانید آن را
+            قبل از ارزیابی ویرایش کنید.</div></div>
+        <div class="field"><label>تعداد <span style="color:var(--bad)">*</span></label>
+          <input id="so_qty" type="number" step="1000"></div>
+        <div class="field"><label>قیمت پیشنهادی هر ماهی <span style="color:var(--bad)">*</span></label>
+          <input id="so_price" type="number" step="any"></div>
+        <div class="field"><label>وزن درخواستی (گرم)</label>
+          <input id="so_weight" type="number" step="any"
+                 placeholder="مثلاً ۳ — برای حالت خودکار الزامی"></div>
+        <div class="field"><label>تاریخ تحویل</label>
+          <input id="so_deliver" type="date"></div>
+        <div class="field"><label>سهم پرداخت نقدی</label>
+          <input id="so_upfront" type="number" step="0.05" placeholder="۰٫۵"></div>
+        <div class="field"><label>تأخیر باقیمانده (روز)</label>
+          <input id="so_delay" type="number" step="1" placeholder="۴۵"></div>
+      </div>
+      <div id="soAlloc" style="margin-top:8px"></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="btnSaleAlloc">پیشنهاد تخصیص cohortها</button>
+        <button class="btn primary" id="btnSaleDecide">ارزیابی آفر فروش</button>
+      </div>
+      <div class="tiny muted" style="margin-top:4px">ارزیابی، مدل را دو بار حل
+        می‌کند: «بدون فروش» و «با فروش روی نسخه کپی وضعیت». کف اقتصادی با
+        جست‌وجوی قیمت بی‌تفاوتی پیدا می‌شود و ممکن است چند ثانیه طول بکشد.</div>
+      <div id="saleResult"></div>
+    </div>
+
+    <div class="panel">
+      <h2>سناریوی What-If</h2>
+      <div class="sub">بدون تغییر هیچ داده واقعی. فرضیات موقتاً عوض می‌شوند و
+        بلافاصله برمی‌گردند.</div>
+      <div id="wifList" style="margin-top:10px"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="btn small" id="btnWifAdd">افزودن تغییر</button>
+        <button class="btn primary" id="btnWifRun">اجرای سناریو</button>
+      </div>
+      <div id="wifResult"></div>
+    </div>
+  </section>
+
+  <!-- ================================================== کیفیت داده -->
+  <section id="tab-quality" class="hidden">
+    <div class="panel">
+      <h2>بررسی‌های کیفیت و سازگاری</h2>
+      <div class="sub">۱۰ بررسی الزامی specification — پس از هر تغییر داده دوباره اجرا می‌شوند.</div>
+      <div class="checks" id="checkList"></div>
+    </div>
+    <div class="panel">
+      <h2>پشتیبان‌گیری و خروجی داده</h2>
+      <div class="sub">چون داده واقعی مزرعه در سیستم ذخیره می‌شود، قبل از هر تغییر
+        بزرگ یک نسخه پشتیبان بگیرید. خروجی شامل cohortها، استخرها، تراکنش‌ها،
+        خوراک، مشاهدات، فرضیات و کل audit trail است.</div>
+      <div class="row" style="margin-top:10px;flex-wrap:wrap">
+        <a class="btn primary" href="/api/export/sqlite">دانلود پشتیبان SQLite</a>
+        <a class="btn" href="/api/export/json/download">دانلود JSON کامل</a>
+        <a class="btn" href="/api/export/csv?table=transactions">CSV تراکنش‌ها</a>
+        <a class="btn" href="/api/export/csv?table=assumption_history">CSV تاریخچه قیمت</a>
+        <a class="btn" href="/api/export/csv?table=egg_offers">CSV آفرها</a>
+        <a class="btn" href="/api/export/csv?table=ponds">CSV استخرها</a>
+      </div>
+      <div id="exportInfo" class="tiny muted" style="margin-top:9px"></div>
+    </div>
+
+    <div class="panel">
+      <h2>جدول مرجع milestoneها</h2>
+      <div class="sub">خروجی مستقیم موتور محاسبات — برای راستی‌آزمایی دستی.</div>
+      <table id="refTable"></table>
+    </div>
+  </section>
+</main>
+
+<div class="overlay" id="overlay"></div>
+<aside class="drawer" id="drawer"></aside>
+<div class="toast" id="toast"></div>
+
+<script src="app.js"></script>
+</body>
+</html>

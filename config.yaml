@@ -1,0 +1,1290 @@
+# =====================================================================
+#  مزرعه قزل‌آلا — پیکربندی مرکزی  /  Trout farm — central configuration
+# ---------------------------------------------------------------------
+#  source: OBS = Observed / Provided Data (داده واقعی مزرعه)
+#          MA  = Modelling Assumption (فرض مدل، قابل تغییر)
+#          DER = Derived (محاسبه‌شده از بقیه پارامترها، فقط نمایشی)
+#
+#  هیچ عدد مهمی نباید در کد پایتون hard-code شود (Fix 5).
+#  تغییر مقدارها از طریق تب «فرضیات» در داشبورد انجام می‌شود و در
+#  جدول assumption_overrides ذخیره می‌گردد؛ این فایل دست‌نخورده می‌ماند.
+# =====================================================================
+
+meta:
+  schema_version: 1
+  stage: "stage-1"
+  base_currency: "toman"
+
+groups:
+  - id: farm
+    title_fa: "مزرعه و استخرها"
+  - id: water
+    title_fa: "آب و اکسیژن"
+  - id: capacity
+    title_fa: "ظرفیت استخر"
+  - id: growth
+    title_fa: "رشد"
+  - id: heterogeneity
+    title_fa: "پراکندگی رشد داخل cohort"
+  - id: mortality
+    title_fa: "تلفات"
+  - id: feed
+    title_fa: "خوراک"
+  - id: price
+    title_fa: "قیمت فروش"
+  - id: egg
+    title_fa: "تخم"
+  - id: cost
+    title_fa: "هزینه ثابت"
+  - id: finance
+    title_fa: "مالی و سرمایه در گردش"
+  - id: fx
+    title_fa: "ارز / بنچمارک سرمایه"
+  - id: stochastic
+    title_fa: "پارامترهای عدم قطعیت"
+  - id: plan
+    title_fa: "سیاست پایه برداشت (برای forecast)"
+  - id: planning
+    title_fa: "برنامه‌ریزی (مرحله ۲)"
+  - id: sale
+    title_fa: "الگوی فروش"
+  - id: saleability
+    title_fa: "سهولت فروش / دسترسی مشتری"
+  - id: run
+    title_fa: "اجرا و افق زمانی"
+
+parameters:
+
+  # ------------------------------------------------------------- farm
+  - key: farm.total_ponds
+    group: farm
+    label_fa: "تعداد کل استخر"
+    value: 21
+    unit: "عدد"
+    source: OBS
+    type: int
+    min: 1
+    max: 200
+  - key: farm.operational_ponds
+    group: farm
+    label_fa: "استخر عملیاتی هدف"
+    value: 19
+    unit: "عدد"
+    source: OBS
+    type: int
+    min: 1
+    max: 200
+  - key: farm.reserve_ponds
+    group: farm
+    label_fa: "استخر رزرو"
+    value: 2
+    unit: "عدد"
+    source: OBS
+    type: int
+    min: 0
+    max: 50
+  - key: farm.pond_volume_m3
+    group: farm
+    label_fa: "حجم هر استخر"
+    value: 20
+    unit: "m³"
+    source: OBS
+    type: float
+    min: 1
+    max: 500
+
+  # ------------------------------------------------------------ water
+  - key: water.flow_l_s
+    group: water
+    label_fa: "دبی هر استخر"
+    value: 15.0
+    unit: "L/s"
+    source: OBS
+    type: float
+  - key: water.temperature_c
+    group: water
+    label_fa: "دمای آب"
+    value: 11.0
+    unit: "°C"
+    source: OBS
+    type: float
+  - key: water.do_inlet_mg_l
+    group: water
+    label_fa: "DO ورودی"
+    value: 8.0
+    unit: "mg/L"
+    source: OBS
+    type: float
+  - key: water.do_outlet_mg_l
+    group: water
+    label_fa: "DO خروجی"
+    value: 6.0
+    unit: "mg/L"
+    source: OBS
+    type: float
+  - key: water.min_safe_do_outlet_mg_l
+    group: water
+    label_fa: "حداقل DO خروجی ایمن"
+    value: 5.5
+    unit: "mg/L"
+    source: MA
+    type: float
+  - key: water.o2_consumption_mg_per_kg_h
+    group: water
+    label_fa: "مصرف اکسیژن ویژه"
+    value: 350.0
+    unit: "mg O₂/kg/h"
+    source: MA
+    type: float
+    note_fa: "بچه‌ماهی قزل‌آلا زیر ۲۰ گرم در ۱۱ درجه"
+
+  # --------------------------------------------------------- capacity
+  - key: capacity.fish_per_pond_1g
+    group: capacity
+    label_fa: "ظرفیت در ۱ گرم"
+    value: 40000
+    unit: "قطعه/استخر"
+    source: OBS
+    type: int
+  - key: capacity.fish_per_pond_2g
+    group: capacity
+    label_fa: "ظرفیت در ۲ گرم"
+    value: 27500
+    unit: "قطعه/استخر"
+    source: OBS
+    type: int
+    note_fa: "بازه تجربی ۲۵٬۰۰۰ تا ۳۰٬۰۰۰ — میانه گرفته شده"
+  - key: capacity.fish_per_pond_15g
+    group: capacity
+    label_fa: "ظرفیت در ۱۵ گرم"
+    value: 13500
+    unit: "قطعه/استخر"
+    source: OBS
+    type: int
+  - key: capacity.no_constraint_below_g
+    group: capacity
+    label_fa: "وزنی که تا زیر آن محدودیت ظرفیت اعمال نمی‌شود"
+    value: 1.0
+    unit: "گرم"
+    source: OBS
+    type: float
+    note_fa: "۸۰ روز اول تا حدود ۱ گرم"
+  - key: capacity.target_utilisation
+    group: capacity
+    label_fa: "سقف هشدار درصد اشغال استخر"
+    value: 0.95
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.1
+    max: 1.5
+
+  # ---------------------------------- بهینه‌سازی چیدمان استخر (Optimize Pond Allocation)
+  - key: pond.max_weight_mix_tolerance_percent
+    group: capacity
+    label_fa: "حداکثر اختلاف وزن مجاز برای Mixed Pond"
+    value: 8
+    unit: "درصد"
+    source: MA
+    type: float
+    min: 0
+    max: 50
+    note_fa: >-
+      دو cohort با اختلاف وزن بیشتر از این درصد هرگز در یک استخر ترکیب
+      نمی‌شوند. داخل این آستانه، ترکیب فقط در صورت نیاز واقعی (کمبود
+      استخر آزاد) مجاز است و به‌وضوح Mixed Cohort/Weight علامت می‌خورد.
+  - key: pond.optimize_horizon_days
+    group: capacity
+    label_fa: "افق آینده‌نگری بهینه‌سازی چیدمان استخر"
+    value: 120
+    unit: "روز"
+    source: MA
+    type: int
+    min: 90
+    max: 140
+    note_fa: >-
+      بهینه‌سازی چیدمان فقط وضعیت امروز را نمی‌بیند؛ تا این تعداد روز
+      آینده را هم در نظر می‌گیرد تا انتقال امروز باعث انتقال اضافه در چند
+      هفته بعد نشود.
+
+  # ----------------------------------------------------------- growth
+  - key: growth.start_weight_g
+    group: growth
+    label_fa: "وزن مبنای روز صفر (تخم/لارو)"
+    value: 0.05
+    unit: "گرم"
+    source: MA
+    type: float
+    min: 0.005
+    max: 1.0
+    note_fa: "برای درون‌یابی لگاریتمی منحنی رشد در ۸۰ روز اول"
+  - key: growth.day_hatch
+    group: growth
+    label_fa: "تخم → Hatch"
+    value: 34
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+    note_fa: >-
+      از Growth Curve (ستون Base). فقط برای milestone/تاریخ تخمینی؛ چون
+      وزن دقیق این مرحله معلوم نیست، در منحنی وزن-سن به‌عنوان لنگر وزن
+      استفاده نمی‌شود (نگاه کنید feed.start_weight_g برای مرحله بعد).
+  - key: growth.day_swimup
+    group: growth
+    label_fa: "تخم → Swim-up / شروع تغذیه"
+    value: 52
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+    note_fa: >-
+      از Growth Curve (ستون Base). مبنای شروع محاسبه هزینه خوراک است:
+      قبل از این روز خوراک صفر است (نگاه کنید feed.start_weight_g).
+  - key: growth.day_05g
+    group: growth
+    label_fa: "تخم → ۰.۵ گرم"
+    value: 70
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+  - key: growth.day_1g
+    group: growth
+    label_fa: "تخم → ۱ گرم"
+    value: 82
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+  - key: growth.day_2g
+    group: growth
+    label_fa: "تخم → ۲ گرم"
+    value: 103
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+  - key: growth.day_5g
+    group: growth
+    label_fa: "تخم → ۵ گرم"
+    value: 126
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+    note_fa: "قبلاً از درون‌یابی روی پلهٔ ۲→۱۰ گرم مشتق می‌شد؛ اکنون لنگر مستقیم دارد."
+  - key: growth.day_10g
+    group: growth
+    label_fa: "تخم → ۱۰ گرم"
+    value: 146
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+  - key: growth.day_15g
+    group: growth
+    label_fa: "تخم → ۱۵ گرم"
+    value: 158
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+  - key: growth.sgr_after_15g_per_day
+    group: growth
+    label_fa: "نرخ رشد ویژه بعد از ۱۵ گرم"
+    value: 0.030
+    unit: "ln(g)/روز"
+    source: MA
+    type: float
+    note_fa: "فقط اگر ماهی بعد از ۱۵ گرم نگه داشته شود"
+  - key: growth.speed_multiplier
+    group: growth
+    label_fa: "ضریب سرعت رشد کل مزرعه"
+    value: 1.0
+    unit: "ضریب"
+    source: MA
+    type: float
+    min: 0.5
+    max: 1.6
+    note_fa: "۱.۰ = معمول؛ >۱ سریع‌تر، <۱ کندتر"
+
+  # -------------------------------------------------- heterogeneity
+  - key: heterogeneity.distribution
+    group: heterogeneity
+    label_fa: "نوع توزیع وزن داخل cohort"
+    value: "lognormal"
+    unit: "-"
+    source: MA
+    type: choice
+    choices: ["lognormal", "normal_truncated"]
+  - key: heterogeneity.cv_at_1g
+    group: heterogeneity
+    label_fa: "ضریب تغییرات وزن (CV) در ۱ گرم"
+    value: 0.12
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.0
+    max: 0.6
+    note_fa: "بازه پیشنهادی اولیه ۱۰٪ تا ۱۵٪"
+  - key: heterogeneity.cv_at_15g
+    group: heterogeneity
+    label_fa: "ضریب تغییرات وزن (CV) در ۱۵ گرم"
+    value: 0.18
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.0
+    max: 0.8
+    note_fa: "پراکندگی وزن با افزایش سن بیشتر می‌شود"
+  - key: heterogeneity.slow_quantile
+    group: heterogeneity
+    label_fa: "چندک گروه کندرشد"
+    value: 0.10
+    unit: "نسبت"
+    source: MA
+    type: float
+  - key: heterogeneity.fast_quantile
+    group: heterogeneity
+    label_fa: "چندک گروه تندرشد"
+    value: 0.90
+    unit: "نسبت"
+    source: MA
+    type: float
+
+  # -------------------------------------------------------- mortality
+  - key: mortality.cum_at_1g
+    group: mortality
+    label_fa: "تلفات تجمعی تا ۱ گرم"
+    value: 0.28
+    unit: "نسبت"
+    source: OBS
+    type: float
+    min: 0.0
+    max: 0.95
+  - key: mortality.cum_at_2g
+    group: mortality
+    label_fa: "تلفات تجمعی تا ۲ گرم"
+    value: 0.32
+    unit: "نسبت"
+    source: OBS
+    type: float
+  - key: mortality.cum_at_5g
+    group: mortality
+    label_fa: "تلفات تجمعی تا ۵ گرم"
+    value: 0.35
+    unit: "نسبت"
+    source: OBS
+    type: float
+  - key: mortality.cum_at_10g
+    group: mortality
+    label_fa: "تلفات تجمعی تا ۱۰ گرم"
+    value: 0.38
+    unit: "نسبت"
+    source: OBS
+    type: float
+  - key: mortality.cum_at_15g
+    group: mortality
+    label_fa: "تلفات تجمعی تا ۱۵ گرم"
+    value: 0.40
+    unit: "نسبت"
+    source: OBS
+    type: float
+  - key: mortality.front_load_exponent
+    group: mortality
+    label_fa: "شدت front-load بودن تلفات مرحله تخم→۱ گرم"
+    value: 0.5
+    unit: "توان"
+    source: MA
+    type: float
+    min: 0.2
+    max: 1.0
+    note_fa: "کمتر از ۱ یعنی تلفات در روزهای اول متمرکزتر است"
+  - key: mortality.daily_after_15g
+    group: mortality
+    label_fa: "تلفات روزانه بعد از ۱۵ گرم"
+    value: 0.0002
+    unit: "نسبت/روز"
+    source: MA
+    type: float
+
+  # ------------------------------------------------------------- feed
+  - key: feed.fcr
+    group: feed
+    label_fa: "FCR پایه"
+    value: 1.0
+    unit: "kg خوراک/kg رشد"
+    source: OBS
+    type: float
+    min: 0.5
+    max: 2.5
+  - key: feed.start_weight_g
+    group: feed
+    label_fa: "وزن تقریبی در مرحله Swim-up (شروع تغذیه دستی)"
+    value: 0.15
+    unit: "گرم"
+    source: MA
+    type: float
+    min: 0.01
+    max: 0.49
+    note_fa: >-
+      قبل از Swim-up ماهی از کیسه زرده تغذیه می‌کند و خوراک دستی صفر است.
+      چون وزن دقیق Hatch/Swim-up ساختگی گذاشته نشد، این وزن مستقل و
+      قابل‌تغییر است — نه از منحنی رشد مشتق می‌شود. محاسبهٔ هزینه خوراک
+      از این وزن به بعد شروع می‌شود (حتی قبل از ۱ گرم)، با همان جدول
+      قیمت/FCR فعلی.
+  - key: feed.fcr_sensitivity
+    group: feed
+    label_fa: "بازه حساسیت FCR"
+    value: [0.9, 1.0, 1.1, 1.2]
+    unit: "لیست"
+    source: MA
+    type: list_float
+  - key: feed.charge_growth_of_dead_fish
+    group: feed
+    label_fa: "احتساب خوراک ماهی‌های تلف‌شده در بازه"
+    value: true
+    unit: "بله/خیر"
+    source: MA
+    type: bool
+  - key: feed.price_table
+    effective_dated: true
+    group: feed
+    label_fa: "جدول قیمت خوراک بر اساس وزن ماهی"
+    source: OBS
+    type: table
+    columns:
+      - {key: w_min, label_fa: "از وزن (g)", type: float}
+      - {key: w_max, label_fa: "تا وزن (g)", type: float}
+      - {key: name, label_fa: "نام/سایز خوراک", type: str}
+      - {key: price, label_fa: "قیمت (تومان/kg)", type: float}
+    value:
+      - {w_min: 0.00, w_max: 0.20, name: "SFP-00", price: 312000}
+      - {w_min: 0.20, w_max: 0.50, name: "FP-0",   price: 312000}
+      - {w_min: 0.50, w_max: 1.50, name: "FP-1",   price: 310000}
+      - {w_min: 1.50, w_max: 3.00, name: "FP-2",   price: 308000}
+      - {w_min: 3.00, w_max: 5.00, name: "FP-3",   price: 305000}
+      - {w_min: 5.00, w_max: 7.00, name: "FP-4",   price: 298000}
+      - {w_min: 7.00, w_max: 10.00, name: "FP-5",  price: 295000}
+      - {w_min: 10.00, w_max: 20.00, name: "GR-1", price: 199000}
+    note_fa: "قیمت ثابت ۳۵۰٬۰۰۰ حذف شد؛ باند ۰-۰.۲ گرم با قیمت باند ۰.۲-۰.۵ پر شده است (MA)"
+  - key: feed.reorder_alert_days
+    group: feed
+    label_fa: "هشدار کمبود خوراک زیر چند روز موجودی"
+    value: 14
+    unit: "روز"
+    source: MA
+    type: int
+
+  # ------------------------------------------------------------ price
+  - key: price.base_1g
+    effective_dated: true
+    group: price
+    label_fa: "قیمت فروش در ۱ گرم"
+    value: 11000
+    unit: "تومان/قطعه"
+    source: OBS
+    type: float
+  - key: price.slope_per_gram
+    effective_dated: true
+    group: price
+    label_fa: "افزایش قیمت به ازای هر گرم بیشتر"
+    value: 800
+    unit: "تومان/گرم"
+    source: OBS
+    type: float
+
+  # -------------------------------------------------------------- egg
+  - key: price.max_priced_weight_g
+    group: price
+    label_fa: "حداکثر وزنی که منحنی قیمت برای آن معتبر است"
+    value: 15.0
+    unit: "گرم"
+    source: MA
+    type: float
+    note_fa: >-
+      بالاتر از این وزن داده قیمت نداریم؛ قیمت در همین سقف نگه داشته می‌شود و
+      برون‌یابی نمی‌شود. cohortهای بالاتر از این وزن در برنامه علامت‌گذاری می‌شوند.
+
+  # -------------------------------------------------------------- egg
+  - key: egg.base_price
+    effective_dated: true
+    group: egg
+    label_fa: "قیمت پایه تخم"
+    value: 6000
+    unit: "تومان/عدد"
+    source: OBS
+    type: float
+  - key: egg.monthly_guideline
+    group: egg
+    label_fa: "راهنمای خرید ماهانه تخم (Planning Guideline)"
+    value: 300000
+    unit: "عدد/ماه"
+    source: MA
+    type: int
+    note_fa: >-
+      محدودیت فیزیکی مطلق نیست. داده واقعی تیر/جولای ۲۰۲۶ نشان می‌دهد
+      ۳۲۰٬۰۰۰ عدد خرید شده است. عبور از این عدد فقط هشدار برنامه‌ریزی است.
+  - key: egg.enforce_hard_monthly_max
+    group: egg
+    label_fa: "اعمال سقف سخت ماهانه تخم"
+    value: false
+    unit: "بله/خیر"
+    source: MA
+    type: bool
+    note_fa: "اگر روشن شود، عبور از سقف سخت به‌عنوان خطا (fail) گزارش می‌شود."
+  - key: egg.hard_monthly_max
+    group: egg
+    label_fa: "سقف سخت ماهانه تخم (در صورت فعال بودن)"
+    value: 400000
+    unit: "عدد/ماه"
+    source: MA
+    type: int
+  - key: egg.annual_scenarios
+    group: egg
+    label_fa: "سناریوهای حجم سالانه تخم"
+    value: [2000000, 2500000, 3000000]
+    unit: "عدد/سال"
+    source: OBS
+    type: list_float
+
+  # ------------------------------------------------------------- cost
+  - key: cost.fixed_monthly
+    effective_dated: true
+    group: cost
+    label_fa: "هزینه ثابت ماهانه مزرعه"
+    value: 120000000
+    unit: "تومان/ماه"
+    source: OBS
+    type: float
+    note_fa: "farm-level است، نه per batch. Baseline Assumption؛ هزینه واقعی ثبت‌شده بر آن اولویت دارد."
+  - key: cost.fixed_cost_mode
+    group: cost
+    label_fa: "نحوه ترکیب هزینه ثابت پایه با هزینه‌های واقعی ثبت‌شده"
+    value: "top_up"
+    unit: "حالت"
+    source: MA
+    type: choice
+    choices: ["top_up", "baseline_only", "actual_only"]
+    note_fa: >-
+      جلوگیری از double counting.
+      top_up = در هر ماه فقط اختلاف تا هزینه ثابت پایه اضافه می‌شود (پیش‌فرض).
+      baseline_only = فقط هزینه ثابت پایه (هزینه‌های واقعی جداگانه شمرده نمی‌شوند).
+      actual_only = فقط هزینه‌های واقعی ثبت‌شده.
+  - key: cost.categories
+    group: cost
+    label_fa: "دسته‌بندی هزینه‌های جانبی"
+    value: ["نگهداری و تعمیرات", "برق و سوخت", "دستمزد", "حمل و نقل",
+            "دارو و بهداشت", "اداری", "سایر"]
+    unit: "لیست"
+    source: MA
+    type: list_str
+    note_fa: "کاربر می‌تواند دسته‌ها را اضافه/کم کند؛ «سایر» همیشه لازم است."
+
+  # ---------------------------------------------------------- finance
+  - key: finance.supplier_credit_days
+    group: finance
+    label_fa: "مهلت پرداخت به تأمین‌کننده"
+    value: 0
+    unit: "روز"
+    source: MA
+    type: int
+  - key: finance.customer_payment_delay_days
+    group: finance
+    label_fa: "تأخیر دریافت از مشتری"
+    value: 0
+    unit: "روز"
+    source: MA
+    type: int
+  - key: finance.working_capital_available
+    group: finance
+    label_fa: "سرمایه در گردش موجود / فرض پایه"
+    value: 8.0e9
+    unit: "تومان"
+    source: MA
+    type: float
+    note_fa: >-
+      Initial / Baseline Working Capital Assumption — یک ورودی مرجع است،
+      نه خروجی ثابت optimizer. سرمایه در گردش موردنیاز با هر تراکنش واقعی
+      (تخم، خوراک، فروش، هزینه، زمان‌بندی پرداخت) دوباره محاسبه می‌شود.
+  - key: finance.sale_immediate_share
+    group: finance
+    label_fa: "سهم پرداخت نقدی در زمان فروش"
+    value: 0.50
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.0
+    max: 1.0
+    note_fa: >-
+      شرایط پرداخت مشتری. باقیمانده با تأخیر دریافت می‌شود.
+      درآمد در تاریخ فروش شناسایی می‌شود ولی وجه نقد طبق همین جدول می‌آید.
+      پرداخت واقعی ثبت‌شده همیشه بر این فرض اولویت دارد.
+  - key: finance.sale_deferred_delay_days
+    group: finance
+    label_fa: "تأخیر دریافت باقیمانده فروش"
+    value: 45
+    unit: "روز"
+    source: MA
+    type: int
+    min: 0
+    max: 365
+    note_fa: "حدود ۱.۵ ماه پس از فروش."
+  - key: finance.customer_upfront_share
+    group: finance
+    label_fa: "سهم دریافت نقدی در زمان فروش"
+    value: 0.50
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.0
+    max: 1.0
+    note_fa: >-
+      منطق معمول: ۵۰٪ هنگام فروش و ۵۰٪ حدود ۴۵ روز بعد.
+      تاریخ شناسایی درآمد از تاریخ دریافت وجه جداست.
+      پرداخت واقعی ثبت‌شده همیشه بر این فرض اولویت دارد.
+  - key: finance.customer_balance_delay_days
+    group: finance
+    label_fa: "تأخیر دریافت باقیمانده وجه فروش"
+    value: 45
+    unit: "روز"
+    source: MA
+    type: int
+    min: 0
+    max: 365
+  - key: finance.wc_forecast_days
+    group: finance
+    label_fa: "افق پیش‌بینی اوج سرمایه در گردش"
+    value: 180
+    unit: "روز"
+    source: MA
+    type: int
+    min: 30
+    max: 730
+  - key: finance.opening_cash
+    group: finance
+    label_fa: "موجودی نقد ابتدای دوره"
+    value: 0
+    unit: "تومان"
+    source: MA
+    type: float
+  - key: finance.cpi_inflation
+    group: finance
+    label_fa: "تورم عمومی سالانه"
+    value: 0.45
+    unit: "نسبت/سال"
+    source: MA
+    type: float
+  - key: finance.feed_inflation
+    group: finance
+    label_fa: "تورم قیمت خوراک"
+    value: 0.45
+    unit: "نسبت/سال"
+    source: MA
+    type: float
+  - key: finance.egg_inflation
+    group: finance
+    label_fa: "تورم قیمت تخم"
+    value: 0.40
+    unit: "نسبت/سال"
+    source: MA
+    type: float
+  - key: finance.sale_price_inflation
+    group: finance
+    label_fa: "تورم قیمت فروش بچه‌ماهی"
+    value: 0.35
+    unit: "نسبت/سال"
+    source: MA
+    type: float
+  - key: finance.fixed_cost_start_date
+    group: finance
+    label_fa: "شروع احتساب هزینه ثابت در دفتر نقدی"
+    value: "2026-02-01"
+    unit: "تاریخ"
+    source: MA
+    type: date
+
+  # --------------------------------------------------------------- fx
+  - key: fx.file
+    group: fx
+    label_fa: "فایل نرخ دلار"
+    value: "data/TGJU_USD_3Y_Daily_Weekly_Close(1).xlsx"
+    unit: "مسیر"
+    source: OBS
+    type: str
+  - key: fx.sheet
+    group: fx
+    label_fa: "نام شیت روزانه"
+    value: "روزانه"
+    unit: "-"
+    source: OBS
+    type: str
+  - key: fx.column
+    group: fx
+    label_fa: "نام ستون قیمت"
+    value: "قیمت پایانی (تومان)"
+    unit: "-"
+    source: OBS
+    type: str
+  - key: fx.benchmark_share
+    group: fx
+    label_fa: "سهم سرمایه برای بنچمارک دلاری"
+    value: 1.0
+    unit: "نسبت"
+    source: MA
+    type: choice
+    choices: [0.25, 0.5, 0.75, 1.0]
+
+  # --------------------------------------------------- stochastic (Fix 5)
+  - key: stochastic.outbreak_probability_per_cohort
+    group: stochastic
+    label_fa: "احتمال بروز بیماری در هر cohort"
+    value: 0.08
+    unit: "احتمال"
+    source: MA
+    type: float
+  - key: stochastic.outbreak_extra_mortality
+    group: stochastic
+    label_fa: "تلفات اضافی در صورت بیماری"
+    value: 0.15
+    unit: "نسبت"
+    source: MA
+    type: float
+  - key: stochastic.mortality_cv
+    group: stochastic
+    label_fa: "پراکندگی تلفات"
+    value: 0.20
+    unit: "CV"
+    source: MA
+    type: float
+  - key: stochastic.fcr_cv
+    group: stochastic
+    label_fa: "پراکندگی FCR"
+    value: 0.08
+    unit: "CV"
+    source: MA
+    type: float
+  - key: stochastic.growth_duration_cv
+    group: stochastic
+    label_fa: "پراکندگی مدت رشد بین cohortها"
+    value: 0.07
+    unit: "CV"
+    source: MA
+    type: float
+  - key: stochastic.egg_offer_arrival_per_month
+    group: stochastic
+    label_fa: "میانگین تعداد Offer تخم در ماه"
+    value: 1.6
+    unit: "تعداد/ماه"
+    source: MA
+    type: float
+  - key: stochastic.offer_fill_rate_mean
+    group: stochastic
+    label_fa: "میانگین fill rate آفرها"
+    value: 0.85
+    unit: "نسبت"
+    source: MA
+    type: float
+  - key: stochastic.feed_price_cv
+    group: stochastic
+    label_fa: "پراکندگی قیمت خوراک"
+    value: 0.10
+    unit: "CV"
+    source: MA
+    type: float
+  - key: stochastic.sale_price_cv
+    group: stochastic
+    label_fa: "پراکندگی قیمت فروش"
+    value: 0.08
+    unit: "CV"
+    source: MA
+    type: float
+  - key: stochastic.random_seed
+    group: stochastic
+    label_fa: "seed تصادفی"
+    value: 20260811
+    unit: "-"
+    source: MA
+    type: int
+
+  # ------------------------------------------------------------- plan
+  - key: plan.assume_harvest_in_forecast
+    group: plan
+    label_fa: "فرض فروش ماهی در وزن برداشت هنگام forecast"
+    value: true
+    unit: "بله/خیر"
+    source: MA
+    type: bool
+    note_fa: "اگر خاموش شود، forecast فرض می‌کند هیچ ماهی فروخته نمی‌شود و فشار ظرفیت بی‌معنا بزرگ می‌شود"
+  - key: plan.baseline_harvest_weight_g
+    group: plan
+    label_fa: "وزن پایه برداشت/فروش"
+    value: 15.0
+    unit: "گرم"
+    source: MA
+    type: float
+    min: 1.0
+    max: 60.0
+    note_fa: "در مرحله ۲ و ۳ جای این فرض را برنامه بهینه‌شده می‌گیرد"
+
+  # --------------------------------------------------- planning (مرحله ۲)
+  - key: planning.decision_months
+    group: planning
+    label_fa: "تعداد ماه‌های تصمیم در برنامه"
+    value: 12
+    unit: "ماه"
+    source: MA
+    type: int
+    min: 3
+    max: 24
+  - key: planning.eval_horizon_weeks
+    group: planning
+    label_fa: "افق ارزیابی مالی (غیرچرخه‌ای)"
+    value: 104
+    unit: "هفته"
+    source: MA
+    type: int
+    min: 72
+    max: 208
+    note_fa: "Fix 2 — حداقل ۷۲ هفته تا cohortهای انتهای سال از نظر مالی درست ثبت شوند."
+  - key: planning.lot_candidates
+    group: planning
+    label_fa: "اندازه‌های مجاز lot تخم"
+    value: [50000, 70000, 100000, 160000, 200000, 250000, 300000]
+    unit: "عدد"
+    source: OBS
+    type: list_float
+    note_fa: "برگرفته از اندازه‌های واقعی مشاهده‌شده؛ lot پیوسته فرض نمی‌شود."
+  - key: planning.harvest_weights
+    group: planning
+    label_fa: "وزن‌های مجاز برداشت"
+    value: [1.0, 2.0, 5.0, 10.0, 15.0]
+    unit: "گرم"
+    source: OBS
+    type: list_float
+    note_fa: "۱ گرم یکی از وزن‌های واقعی فروش مزرعه است و باید در بهینه‌سازی باشد."
+  - key: planning.max_lots_per_month
+    group: planning
+    label_fa: "حداکثر تعداد lot در هر ماه"
+    value: 2
+    unit: "عدد"
+    source: OBS
+    type: int
+    min: 1
+    max: 4
+    note_fa: "داده واقعی جولای ۲۰۲۶ دو خرید در یک ماه دارد."
+  - key: planning.purchase_day_of_month
+    group: planning
+    label_fa: "روز فرضی خرید در ماه"
+    value: 5
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+    max: 28
+  - key: planning.monthly_availability
+    group: planning
+    label_fa: "عرضه مورد انتظار تخم در هر ماه"
+    value: 300000
+    unit: "عدد/ماه"
+    source: MA
+    type: float
+    note_fa: >-
+      سناریوی availability برای برنامه‌ریزی. تصمیم خرید واقعی همچنان
+      offer-based و exogenous است (Fix 1).
+  - key: planning.annual_scenario
+    group: planning
+    label_fa: "هدف برنامه‌ریزی حجم سالانه تخم (تضمین‌شده نیست)"
+    value: 2300000
+    unit: "عدد/سال"
+    source: MA
+    type: float
+    note_fa: >-
+      این عدد یک Planning Target است، نه guaranteed supply.
+      داده تاریخی نشان می‌دهد availability نامنظم است. تصمیم واقعی خرید در
+      مرحله ۳ همچنان Offer-Based و exogenous خواهد بود.
+  - key: planning.base_procurement_capability
+    group: planning
+    label_fa: "توان تأمین پایه مشاهده‌شده (سالانه‌شده)"
+    value: 2000000
+    unit: "عدد/سال"
+    source: OBS
+    type: float
+    note_fa: "برآورد از خریدهای واقعی ثبت‌شده تا امروز."
+  - key: planning.stretch_procurement
+    group: planning
+    label_fa: "سقف خوش‌بینانه تأمین (Stretch)"
+    value: 3000000
+    unit: "عدد/سال"
+    source: MA
+    type: float
+  - key: planning.guideline_penalty_per_egg
+    group: planning
+    label_fa: "جریمه نرم عبور از راهنمای ماهانه"
+    value: 300
+    unit: "تومان/عدد"
+    source: MA
+    type: float
+    note_fa: "راهنما محدودیت سخت نیست؛ عبور از آن فقط پرهزینه است."
+  - key: planning.harvest_wave_fractions
+    group: planning
+    label_fa: "سهم موج‌های برداشت (تندرشد/معمول/کندرشد)"
+    value: [0.25, 0.50, 0.25]
+    unit: "نسبت"
+    source: MA
+    type: list_float
+    note_fa: "برداشت یک cohort در سه موج بر اساس پراکندگی رشد، نه یک نقطه واحد."
+  - key: planning.risk_aversion
+    group: planning
+    label_fa: "ضریب ریسک‌گریزی در تابع هدف"
+    value: 0.30
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.0
+    max: 1.0
+    note_fa: "۰ = بیشینه سود مورد انتظار · ۱ = بهینه‌سازی روی سناریوی نامساعد."
+  - key: planning.pond_utilisation_target
+    group: planning
+    label_fa: "سقف بهره‌برداری از استخرهای عملیاتی در برنامه"
+    value: 0.95
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.5
+    max: 1.0
+  - key: planning.keep_reserve_free
+    group: planning
+    label_fa: "استخرهای رزرو در برنامه آزاد بمانند"
+    value: true
+    unit: "بله/خیر"
+    source: MA
+    type: bool
+  - key: planning.saleability
+    group: planning
+    label_fa: "سهولت فروش بازار به تفکیک بازه وزنی"
+    value:
+      - {w_min: 0.0,  w_max: 2.0,  prob: 0.90, retry_discount: 0.00, max_demand_per_period: null,
+         label: "خیلی بالا (۱ تا ۲ گرم)"}
+      - {w_min: 2.0,  w_max: 5.0,  prob: 0.75, retry_discount: 0.00, max_demand_per_period: null,
+         label: "بالا (۲ تا ۵ گرم)"}
+      - {w_min: 5.0,  w_max: 10.0, prob: 0.45, retry_discount: 0.05, max_demand_per_period: 40000,
+         label: "متوسط (۵ تا ۱۰ گرم)"}
+      - {w_min: 10.0, w_max: 15.0, prob: 0.28, retry_discount: 0.08, max_demand_per_period: 30000,
+         label: "پایین (۱۰ تا ۱۵ گرم)"}
+      - {w_min: 15.0, w_max: 999.0, prob: 0.13, retry_discount: 0.13, max_demand_per_period: 15000,
+         label: "خیلی پایین (بالای ۱۵ گرم)"}
+    unit: "احتمال / نسبت / قطعه در دوره"
+    source: MA
+    type: table
+    note_fa: >-
+      Modelling Assumption — برآورد تجربی کیفی مدیر مزرعه (خیلی بالا/بالا/
+      متوسط/پایین/خیلی‌پایین) که به عدد ترجمه شده، نه Observed Market Fact.
+      سه عدد جدا نگه داشته می‌شود: `prob` (احتمال فروش در همان تلاش اول، با
+      قیمت کامل — هرگز مستقیم در قیمت آن تلاش ضرب نمی‌شود)، `retry_discount`
+      (تخفیفی که واقعاً لازم است تا ماهیِ فروش‌نرفته در تلاش‌های بعدی
+      جابه‌جا شود)، و `max_demand_per_period` (حداکثر تعداد قابل‌فروش در یک
+      دورهٔ `planning.demand_period_days` روزه — عدد محافظه‌کارانه، نه
+      ظرفیت واقعی بازار؛ `null` یعنی «داده کافی برای محدودکردن نداریم»، نه
+      «نامحدود واقعی»، و برای دو بازهٔ خیلی‌روان اول عمداً محدود نشده).
+      مازاد بر این سقف به‌جای فروش خودکار در آخرین retry، به‌صورت
+      Unsold Inventory/Carry-over نگه داشته می‌شود (نگاه کنید
+      `planning.max_carryover_periods`). با ورود داده واقعی فروش (تاریخ
+      آفر، تاریخ فروش، تعداد واقعاً فروخته‌شده در هر دوره)، هر سه عدد باید
+      از تاریخچه واقعی تخمین زده شوند؛ فعلاً چنین داده‌ای کافی نیست.
+      بازه‌های ۱۰-۱۵ و بالای ۱۵ گرم یک‌بار تعدیل شدند (اصل: prob=0.22/0.10،
+      retry_discount=0.10/0.15، cap=20000/10000): با آن مقادیر، بعد از رفع
+      یک باگ جدا (تخفیف/سقف بر اساس وزن هدف به‌جای وزن واقعی لحظهٔ فروش
+      محاسبه می‌شد)، هدف‌گذاری مستقیم این دو وزن عملاً همیشه منفی می‌شد.
+      اما یک باگ گزارشی جدا (`sales_by_weight` بر اساس وزن هدف لات
+      دسته‌بندی می‌شد، نه وزن واقعی فروش) هم اصلاح شد و نشان داد بخش
+      قابل‌توجهی از فروش‌های «هدف ۵g» در واقع در وزن‌های ۱۰-۱۵ و بالای ۱۵
+      گرم اتفاق می‌افتد — فقط قبلاً دیده نمی‌شد. با آن دو اصلاح به‌تنهایی،
+      حتی با مقادیر اصلی، ۱۵ گرم سهم واقعی و صادقانه‌ای (~۱۱٪) داشت.
+      مقادیر فعلی (prob=0.28/0.13، retry_discount=0.08/0.13،
+      cap=30000/15000) فقط یک تعدیل ملایم روی همان مبنا هستند — نه یک
+      اصلاح اضطراری — و صرفاً برای اینکه ۱۰ گرم هم سهم کمی بیشتری بگیرد.
+  - key: planning.demand_period_days
+    group: planning
+    label_fa: "طول دورهٔ سنجش ظرفیت تقاضای بازار"
+    value: 30
+    unit: "روز"
+    source: MA
+    type: int
+    min: 7
+    max: 90
+  - key: planning.max_carryover_periods
+    group: planning
+    label_fa: "حداکثر دورهٔ ۱۴روزهٔ اضافه برای فروش موجودی روی سقف تقاضا"
+    value: 0
+    unit: "دوره"
+    source: MA
+    type: int
+    min: 0
+    max: 20
+    note_fa: >-
+      منسوخ — فعلاً در کد مصرف نمی‌شود. Unsold Inventory اکنون همیشه تا
+      فروش یا پایان کل افق برنامه (نه یک بازهٔ محدودشده) در مدل باقی
+      می‌ماند و همچنان استخر/تلفات/هزینه دارد. این کلید برای سازگاری با
+      نسخه قبلی نگه داشته شده؛ در آینده حذف می‌شود.
+  - key: planning.saleability_warn_threshold
+    group: planning
+    label_fa: "آستانه هشدار Sale Bottleneck (زیر این احتمال، هشدار داده شود)"
+    value: 0.35
+    unit: "احتمال"
+    source: MA
+    type: float
+    min: 0.0
+    max: 1.0
+    note_fa: >-
+      اگر برنامه بخش قابل‌توجهی از فروش را در بازه‌ای با احتمال کمتر از این
+      آستانه قرار دهد، هشدار «Unsold Inventory / Sale Bottleneck» نشان
+      داده می‌شود.
+  - key: planning.sale_delay_days
+    group: planning
+    label_fa: "طول هر دوره تلاش برای فروش"
+    value: 14
+    unit: "روز"
+    source: MA
+    type: int
+    min: 7
+    max: 60
+    note_fa: "اگر در یک دوره مشتری پیدا نشود، فروش به دوره بعد موکول می‌شود."
+  - key: planning.max_sale_delay_periods
+    group: planning
+    label_fa: "حداکثر تعداد دوره تأخیر مدل‌شده"
+    value: 3
+    unit: "دوره"
+    source: MA
+    type: int
+    min: 1
+    max: 8
+  - key: planning.enforce_pond_feasibility
+    group: planning
+    label_fa: "برنامه نهایی از ظرفیت استخر عبور نکند"
+    value: true
+    unit: "بله/خیر"
+    source: MA
+    type: bool
+    note_fa: >-
+      اگر پس از گرد کردن صحیح، نیاز از استخرهای عملیاتی بیشتر شود، برنامه
+      feasible اعلام نمی‌شود و با برش ظرفیت دوباره حل می‌شود.
+  - key: planning.max_repair_rounds
+    group: planning
+    label_fa: "حداکثر دورهای اصلاح ظرفیت"
+    value: 4
+    unit: "دور"
+    source: MA
+    type: int
+    min: 1
+    max: 10
+  - key: planning.pond_breach_penalty
+    group: planning
+    label_fa: "جریمه هر استخر-هفته کمبود ظرفیت"
+    value: 60000000
+    unit: "تومان/استخر/هفته"
+    source: MA
+    type: float
+    note_fa: >-
+      محدودیت ظرفیت «کشسان» است: اگر وضعیت فعلی خودش از ظرفیت عبور کرده باشد،
+      مدل به‌جای Infeasible شدن، کمبود را صریح گزارش می‌کند و آن را کمینه می‌سازد.
+  - key: planning.demand_breach_penalty
+    group: planning
+    label_fa: "جریمه هر قطعه-هفته عبور از سقف تقاضای بازار"
+    value: 50000
+    unit: "تومان/قطعه/هفته"
+    source: MA
+    type: float
+    note_fa: >-
+      منسوخ — فعلاً در کد مصرف نمی‌شود. سقف تقاضای هر بازهٔ وزنی
+      (planning.saleability) برای فروش برنامه‌ریزی‌شده/اختیاری optimizer
+      اکنون یک محدودیت سخت (Hard Constraint) و مشترک کل مزرعه است، نه
+      کشسان — optimizer هرگز فروش اختیاری بیشتر از این سقف برنامه‌ریزی
+      نمی‌کند. فقط فروش‌های قطعی/متعهدشده (Firm) که از قبل تعهد شده‌اند از
+      این محدودیت مستثنی‌اند و در صورت عبور، هشدار داده می‌شوند نه بلوکه.
+      این کلید برای سازگاری با نسخه قبلی نگه داشته شده؛ در آینده حذف می‌شود.
+  - key: planning.wc_breach_penalty
+    group: planning
+    label_fa: "جریمه هفتگی عبور از سرمایه در گردش"
+    value: 0.02
+    unit: "نسبت/هفته"
+    source: MA
+    type: float
+    min: 0.0
+    max: 1.0
+    note_fa: "هزینه تأمین مالی اضطراری؛ عبور ممکن است ولی گران است."
+  - key: planning.solver_time_limit_s
+    group: planning
+    label_fa: "سقف زمان حل MILP"
+    value: 60
+    unit: "ثانیه"
+    source: MA
+    type: int
+    min: 5
+    max: 600
+  - key: planning.decision_window_days
+    group: planning
+    label_fa: "بازهٔ تصمیم‌گیری خرید/فروش"
+    value: 10
+    unit: "روز"
+    source: MA
+    type: int
+    min: 1
+    max: 30
+    note_fa: >-
+      فقط cadence برنامه‌ریزی (اصلاح ۲) است: پیشنهادهای خرید/فروش در
+      برنامهٔ ۹۰روزه به‌جای هر هفته، در همین بازه‌های چندروزه تجمیع
+      می‌شوند. سقف تقاضا/ظرفیت استخر همچنان روی شبکهٔ هفتگی محاسبه
+      می‌شود؛ ثبت تراکنش واقعی هم با تاریخ واقعی خودش می‌ماند و اصلاً
+      اثر نمی‌پذیرد.
+  - key: planning.seasonality_h1_share
+    group: planning
+    label_fa: "سهم عرضه/تقاضا در نیمهٔ اول سال شمسی"
+    value: 0.40
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.05
+    max: 0.95
+    note_fa: >-
+      اصلاح ۴ — فرض ساده: ۴۰٪ عرضهٔ تخم و تقاضای فروش در ۶ ماه اول سال
+      شمسی (فروردین–شهریور)، ۶۰٪ در ۶ ماه دوم (مهر–اسفند). فقط در
+      forecast/planning اثر می‌گذارد (سقف ماهانه خرید تخم و سقف هفتگی
+      تقاضای فروش را حول همان میانگین موجود بازتوزیع می‌کند)؛ داده واقعی
+      observed را override نمی‌کند.
+
+  # ------------------------------------------ موتور تصمیم آفر (مرحله ۳)
+  - key: offers.negotiation_margin
+    group: planning
+    label_fa: "حاشیه چانه‌زنی برای قیمت پیشنهادی متقابل"
+    value: 0.08
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.0
+    max: 0.5
+  - key: offers.negotiate_band
+    group: planning
+    label_fa: "بازه‌ای که به‌جای رد کردن، مذاکره پیشنهاد می‌شود"
+    value: 0.10
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.0
+    max: 0.5
+    note_fa: "اگر قیمت تا این حد زیر کف اقتصادی باشد، NEGOTIATE به‌جای REJECT."
+  - key: offers.opportunity_rate_annual
+    group: planning
+    label_fa: "نرخ فرصت سرمایه برای ارزش‌گذاری شرایط پرداخت"
+    value: 0.45
+    unit: "سالانه"
+    source: MA
+    type: float
+    min: 0.0
+    max: 3.0
+    note_fa: >-
+      فقط برای مقایسه شرایط پرداخت مختلف استفاده می‌شود (نقد در برابر مدت‌دار)،
+      نه برای micro-discounting جریان‌های روزانه.
+  - key: offers.sale_weight_tolerance
+    group: planning
+    label_fa: "بازه پذیرش وزن در آفر فروش"
+    value: 0.25
+    unit: "نسبت ±"
+    source: MA
+    type: float
+    min: 0.01
+    max: 1.0
+    note_fa: >-
+      مشتری «حدود ۳ گرم» می‌خواهد، نه دقیقاً ۳٫۰۰ گرم. سهم قابل تأمین هر
+      cohort از روی توزیع وزن داخل همان cohort در این بازه محاسبه می‌شود.
+  - key: offers.min_cohort_share
+    group: planning
+    label_fa: "حداقل سهم یک cohort برای واردشدن در تخصیص آفر"
+    value: 0.05
+    unit: "نسبت"
+    source: MA
+    type: float
+    min: 0.0
+    max: 1.0
+  - key: offers.floor_search_max_solves
+    group: planning
+    label_fa: "حداکثر تعداد حل مدل برای یافتن قیمت بی‌تفاوتی"
+    value: 6
+    unit: "بار"
+    source: MA
+    type: int
+    min: 1
+    max: 20
+    note_fa: >-
+      کف تصمیم اقتصادی با جست‌وجوی دودویی روی قیمت فروش پیدا می‌شود و هر
+      گام یک بار optimizer را اجرا می‌کند. عدد بالاتر = دقیق‌تر ولی کندتر.
+  - key: offers.floor_tolerance_per_fish
+    group: planning
+    label_fa: "دقت قابل قبول قیمت بی‌تفاوتی"
+    value: 50
+    unit: "تومان/قطعه"
+    source: MA
+    type: float
+    min: 1
+    max: 5000
+
+  # -------------------------------------------------------------- run
+  - key: run.timeline_horizon_days
+    group: run
+    label_fa: "افق نمایش timeline"
+    value: 180
+    unit: "روز"
+    source: MA
+    type: int
+  - key: run.forecast_checkpoints_days
+    group: run
+    label_fa: "نقاط forecast ظرفیت"
+    value: [30, 60, 90, 140]
+    unit: "روز"
+    source: MA
+    type: list_float
+  - key: run.planning_horizon_weeks
+    group: run
+    label_fa: "افق برنامه‌ریزی مالی غیرچرخه‌ای (Fix 2)"
+    value: 104
+    unit: "هفته"
+    source: MA
+    type: int
+    note_fa: "حداقل ۷۲ هفته لازم است؛ ۱۰۴ = دو سال کامل"
+
+  # --------------------------------------------------- الگوی فروش (اصلاح ۱)
+  - key: sale.typical_min_qty
+    group: sale
+    label_fa: "کف بازهٔ معمول تعداد فروش"
+    value: 30000
+    unit: "قطعه"
+    source: MA
+    type: int
+    min: 1000
+    note_fa: >-
+      فروش پیشنهادی معمولاً باید در بازهٔ typical_min_qty..typical_max_qty
+      باشد؛ مقادیر خیلی کمتر (مثل ۴-۵ هزار) فقط به‌عنوان استثنا (معمولاً
+      باقیماندهٔ carry-over) قابل قبول‌اند، نه حالت عادی.
+  - key: sale.typical_max_qty
+    group: sale
+    label_fa: "سقف بازهٔ معمول تعداد فروش"
+    value: 100000
+    unit: "قطعه"
+    source: MA
+    type: int
+    min: 1000
+  - key: sale.small_lot_penalty_per_fish
+    group: sale
+    label_fa: "جریمهٔ نرم دستهٔ کوچک به‌ازای هر قطعه"
+    value: 50
+    unit: "تومان/قطعه"
+    source: MA
+    type: float
+    min: 0
+    note_fa: >-
+      یک جریمهٔ *نرم* (نه محدودیت سخت) در Optimizer: اگر میانگین حجم
+      هفتگیِ فروش یک کاندید (در صورت انتخاب کامل) کمتر از typical_min_qty
+      باشد، متناسب با میزان کمبود از حاشیهٔ آن کاندید کم می‌شود. کاندیدی
+      که با وجود این جریمه هنوز به‌صرفه باشد (دلیل اقتصادی/عملیاتی کافی)
+      همچنان انتخاب می‌شود — صفر یعنی این جریمه کاملاً خاموش است.
