@@ -801,15 +801,54 @@ class Plan:
                                            self.state.as_of)
         acts.extend(acts_sale)
 
-        # خوراک
-        for b in self.monthly[:4]:
-            if b["feed_kg"] > 0 and b["start"] <= end.isoformat():
-                acts.append({"date": b["start"], "type": "feed_purchase",
-                             "title": f"تأمین {b['feed_kg']:,.0f} kg خوراک",
-                             "detail": f"ماه {b['key']} · هزینه تقریبی "
-                                       f"{b['feed_cost']:,.0f} تومان",
-                             "quantity": b["feed_kg"],
-                             "days": (date.fromisoformat(b["start"]) - self.state.as_of).days})
+        # خوراک — به تفکیک Feed Type (نه یک مقدار کلی برای کل ماه).
+        # همان جدول قیمت خوراک بر اساس وزن (feed.price_table، از طریق
+        # bio.feed_name) که همه‌جای دیگر مدل استفاده می‌شود، اینجا هم
+        # منبع تشخیص نوع خوراک است — منطق یا جدول جدیدی ساخته نشد. برای
+        # هر کاندید انتخاب‌شده، وزن واقعیِ همان هفته (p.weight[t]) نوع
+        # خوراک را تعیین می‌کند.
+        #
+        # زمان سفارش: از موجودی *همان نوع* شروع می‌کنیم و هفته‌به‌هفته
+        # طبق مصرف پیش‌بینی‌شدهٔ همان نوع کم می‌کنیم تا به آستانهٔ هشدار
+        # برسد (feed.reorder_alert_days — از قبل در config تعریف شده
+        # بود، فقط جایی استفاده نمی‌شد). اگر موجودی فعلی برای کل افق
+        # ۹۰روزه کافی باشد، اصلاً اقدامی پیشنهاد نمی‌شود.
+        weekly_by_type: dict = {}
+        for p, wgt in self._chosen("all"):
+            for t in range(min(len(p.feed_kg), len(g.dates))):
+                kg = p.feed_kg[t] * wgt
+                if kg <= 1e-9 or g.dates[t] > end:
+                    continue
+                ftype = self.bio.feed_name(p.weight[t])
+                rec = weekly_by_type.setdefault(ftype, {})
+                w = rec.setdefault(t, {"kg": 0.0, "cost": 0.0})
+                w["kg"] += kg
+                w["cost"] += p.feed_cost[t] * wgt
+
+        reorder_days = int(self.A.get("feed.reorder_alert_days"))
+        for ftype, by_week in weekly_by_type.items():
+            stock = self.state.feed.get(ftype, {}).get("qty_kg", 0.0)
+            total_kg = sum(w["kg"] for w in by_week.values())
+            total_cost = sum(w["cost"] for w in by_week.values())
+            order_t = None
+            for t in sorted(by_week):
+                weekly_kg = by_week[t]["kg"]
+                alert_kg = (weekly_kg / 7.0) * reorder_days
+                if stock <= alert_kg:
+                    order_t = t
+                    break
+                stock -= weekly_kg
+            if order_t is None:
+                continue    # موجودی فعلی این نوع برای کل افق ۹۰روزه کافی است
+            order_date = win_start(g.dates[order_t])
+            acts.append({
+                "date": order_date.isoformat(), "type": "feed_purchase",
+                "title": f"سفارش {total_kg:,.0f} kg خوراک {ftype}",
+                "detail": f"نوع خوراک: {ftype} · موجودی فعلی تا حدود "
+                          f"{reorder_days} روز کفاف می‌دهد · هزینه تقریبی "
+                          f"{total_cost:,.0f} تومان برای کل نیاز ۹۰روزهٔ همین نوع",
+                "quantity": total_kg, "feed_type": ftype,
+                "days": (order_date - self.state.as_of).days})
         acts.sort(key=lambda a: a["date"])
         w_end = g.index_of(end)
         return {

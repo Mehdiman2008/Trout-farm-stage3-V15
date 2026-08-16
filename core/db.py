@@ -14,8 +14,9 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 
-DEFAULT_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                          "data", "farm.db")
+DEFAULT_DB = os.getenv("DATABASE_PATH") or os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "farm.db"
+)
 
 # انواع تراکنش مجاز
 TXN_TYPES = [

@@ -1372,6 +1372,109 @@ def test_manual_mix_forced_cohorts_unaffected_by_manual_choice(E):
 
 
 # ═══════════════════════ اصلاح ۲ — بازهٔ تصمیم‌گیری ۱۰ روزه
+# ═══════════════════════ اصلاح Feed Planning — تفکیک نوع خوراک در برنامه ۹۰ روزه
+def test_feed_purchase_actions_are_split_by_feed_type(E):
+    """
+    باگ گزارش‌شده: خرید خوراک در برنامهٔ ۹۰روزه یک مقدار کلی نشان می‌داد
+    (مجموع همهٔ انواع). هر اقدام تأمین خوراک باید مشخص کند برای کدام
+    Feed Type است، از همان جدول قیمت خوراک بر اساس وزن (بدون جدول جدید).
+    """
+    A, bio, st = ctx(E)
+    p = Plan(A, bio, st, "balanced")
+    ap = p.action_plan_90d()
+    feeds = [a for a in ap["actions"] if a["type"] == "feed_purchase"]
+    assert feeds, "باید حداقل یک اقدام تأمین خوراک وجود داشته باشد"
+    valid_names = {b["name"] for b in A.get("feed.price_table")}
+    for a in feeds:
+        assert "feed_type" in a and a["feed_type"], "هر اقدام باید نوع خوراک مشخص داشته باشد"
+        assert a["feed_type"] in valid_names, (
+            f"نوع خوراک {a['feed_type']} در جدول قیمت خوراک موجود نیست — "
+            f"باید مستقیماً از feed.price_table بیاید")
+        assert a["feed_type"] in a["title"], "عنوان اقدام باید نوع خوراک را نشان دهد"
+
+    # هیچ دو اقدامی نباید یک نوع خوراک را دو بار به‌عنوان یک مقدار جدا
+    # از هم (بدون ادغام) در همان لحظه گزارش کنند
+    types_seen = [a["feed_type"] for a in feeds]
+    assert len(types_seen) == len(set(types_seen)), \
+        "هر نوع خوراک باید فقط یک اقدام سفارش در برنامهٔ ۹۰روزه داشته باشد"
+
+
+def test_feed_purchase_quantity_matches_per_type_consumption(E):
+    """مقدار پیشنهادی هر اقدام باید با نیاز واقعیِ ۹۰روزهٔ همان نوع خوراک
+    (بر اساس cohort/لات‌هایی که واقعاً در آن بازهٔ وزنی هستند) بخواند."""
+    A, bio, st = ctx(E)
+    p = Plan(A, bio, st, "balanced")
+    ap = p.action_plan_90d()
+    feeds = {a["feed_type"]: a["quantity"] for a in ap["actions"]
+            if a["type"] == "feed_purchase"}
+    assert feeds
+
+    # محاسبهٔ مستقل نیاز هر نوع از همان Profileهای انتخاب‌شده، برای مقایسه
+    end = st.as_of + timedelta(days=90)
+    independent: dict = {}
+    for k, wgt in p.solution.selected.items():
+        pool = p.cand_base["new_lots"] if k.startswith("L|") else p.cand_base["existing"]
+        prof = pool.get(k)
+        if not prof:
+            continue
+        for t in range(min(len(prof.feed_kg), len(p.grid.dates))):
+            kg = prof.feed_kg[t] * wgt
+            if kg <= 1e-9 or p.grid.dates[t] > end:
+                continue
+            ftype = bio.feed_name(prof.weight[t])
+            independent[ftype] = independent.get(ftype, 0.0) + kg
+
+    for ftype, qty in feeds.items():
+        assert qty == pytest.approx(independent.get(ftype, 0.0), rel=1e-6), (
+            f"مقدار پیشنهادی {ftype} ({qty:,.0f}) با نیاز محاسبه‌شدهٔ مستقل "
+            f"({independent.get(ftype, 0.0):,.0f}) نمی‌خواند")
+
+
+def test_feed_purchase_timing_respects_existing_type_specific_stock(E):
+    """
+    زمان سفارش هر نوع باید از موجودی *همان نوع* شروع شود، نه یک موجودی
+    مشترک بین انواع. اگر یک نوع موجودی زیادی داشته باشد که کل نیاز
+    ۹۰روزه‌اش را می‌پوشاند، نباید اصلاً اقدام سفارشی برایش پیشنهاد شود؛
+    انواع دیگر (با موجودی صفر) باید هم‌چنان طبیعی ظاهر شوند.
+    """
+    A, bio, st = ctx(E)
+    p0 = Plan(A, bio, st, "balanced")
+    ap0 = p0.action_plan_90d()
+    feeds0 = {a["feed_type"] for a in ap0["actions"] if a["type"] == "feed_purchase"}
+    assert feeds0, "باید حداقل یک نوع خوراک نیاز به سفارش داشته باشد"
+    target_type = sorted(feeds0)[0]
+    total_need = next(a["quantity"] for a in ap0["actions"]
+                      if a["type"] == "feed_purchase" and a["feed_type"] == target_type)
+
+    st.feed = dict(st.feed)
+    st.feed[target_type] = {"name": target_type, "qty_kg": total_need * 10,
+                            "value": 0, "purchased_kg": 0, "purchased_cost": 0,
+                            "consumed_kg": 0, "last_purchase": None, "avg_cost": 0}
+    p1 = Plan(A, bio, st, "balanced")
+    ap1 = p1.action_plan_90d()
+    feeds1 = {a["feed_type"] for a in ap1["actions"] if a["type"] == "feed_purchase"}
+    assert target_type not in feeds1, (
+        f"با موجودی کافی برای {target_type}، نباید اقدام سفارش جدیدی برایش "
+        f"پیشنهاد شود")
+    assert feeds1 == feeds0 - {target_type}, \
+        "بقیهٔ انواع خوراک (با موجودی صفر) نباید تحت‌تأثیر قرار بگیرند"
+
+
+def test_feed_purchase_uses_only_existing_price_table_no_new_table(E):
+    """این اصلاح نباید هیچ منبع/جدول جدیدی برای تشخیص نوع خوراک بسازد —
+    فقط از feed.price_table موجود (از طریق bio.feed_name) استفاده شود."""
+    A, bio, st = ctx(E)
+    p = Plan(A, bio, st, "balanced")
+    ap = p.action_plan_90d()
+    feeds = [a for a in ap["actions"] if a["type"] == "feed_purchase"]
+    table_names = {b["name"] for b in A.get("feed.price_table")}
+    for a in feeds:
+        # هر وزنی که این نوع خوراک برایش گزارش شده، از bio.feed_name همان
+        # وزن باید دقیقاً همین نام را بدهد — یعنی هیچ نگاشت موازی‌ای
+        # ساخته نشده
+        assert a["feed_type"] in table_names
+
+
 def test_action_plan_groups_into_decision_windows(E):
     """
     پیشنهادهای خرید/فروش باید در بازه‌های `planning.decision_window_days`

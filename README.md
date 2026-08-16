@@ -296,9 +296,3 @@ Configure deployment environment variables rather than editing source code:
 The service calls Navasan `ohlcSearch` and deliberately requests only completed calendar days (up to yesterday in Iran time). This prevents an intraday quote from being labelled as a verified closing price. If no newer completed close exists, the dashboard keeps the latest verified previous close and displays its age/stale status.
 
 At application startup the service attempts at most one live refresh per calendar day. Manual observations remain the lowest-priority fallback. Data priority for the same date is Navasan API > historical TGJU Excel > manual. The USD quarterly capital benchmark remains an opportunity-cost/capital-value benchmark only and does not replace operating profit, NPV or the optimiser objective.
-
----
-
-## Railway quick deploy
-
-This repository can run on Railway with `python app.py`. Runtime settings are environment-driven (`PORT`, `DATABASE_PATH`, and Navasan variables). For deployment details see `RAILWAY_DEPLOY.md`.
