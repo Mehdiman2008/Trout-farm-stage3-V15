@@ -669,6 +669,31 @@ class Plan:
             "plan_months": len(plan_months),
         }
 
+    @staticmethod
+    def _flush_sale_batch(acts_sale, hw, start, end, qty, sources, min_qty, typ_min,
+                          typ_max, as_of):
+        """یک دستهٔ تجمیع‌شدهٔ فروش (از یک یا چند بازهٔ متوالی) را به فهرست
+        اقدام‌ها اضافه می‌کند، با برچسب استثنای متناسب با کف مطلق/بازهٔ معمول."""
+        span = "" if start == end else f" تا {end.isoformat()}"
+        note = ""
+        if qty < min_qty:
+            note = (f" — استثنایی و بسیار کوچک (کمتر از کف مطلق "
+                    f"{min_qty:,.0f})؛ معمولاً باقیماندهٔ آخر یک cohort")
+        elif qty < typ_min:
+            note = (f" — کمتر از بازهٔ معمول فروش ({typ_min:,.0f} تا "
+                    f"{typ_max:,.0f})؛ جمعیت کافی برای رساندن به بازهٔ معمول "
+                    f"در دسترس نبود")
+        src_txt = "، ".join(
+            f"{lb} ({sv['qty']:,.0f}{' · سهم جزئی' if sv['partial'] else ''})"
+            for lb, sv in sources.items())
+        acts_sale.append({
+            "date": start.isoformat(), "type": "sale",
+            "title": f"فروش {qty:,.0f} قطعه در {hw:g} گرم",
+            "detail": f"از {src_txt}{span}" + note,
+            "quantity": qty, "days": (start - as_of).days,
+            "below_typical_range": qty < typ_min,
+            "very_small_exception": qty < min_qty})
+
     def action_plan_90d(self) -> dict:
         """
         برنامه اقدام ۹۰ روز آینده — خروجی عملیاتی اصلی برای مدیر.
@@ -712,6 +737,7 @@ class Plan:
                 "quantity": b["qty"], "days": (ws - self.state.as_of).days})
 
         # ----------------------------------------------------------- فروش
+        min_qty = float(self.A.get("sale.min_qty"))
         typ_min = float(self.A.get("sale.typical_min_qty"))
         typ_max = float(self.A.get("sale.typical_max_qty"))
         sales: dict = {}
@@ -734,20 +760,46 @@ class Plan:
                 if weight < 0.999:
                     src["partial"] = True
 
+        # تجمیع بیشتر (اصلاح ۱): اقدام‌های فروشِ پیاپی و کوچک برای همان
+        # وزن هدف، در چند بازهٔ متوالی، تا رسیدن به کف بازهٔ معمول با هم
+        # ادغام می‌شوند — هدف کاهش تعداد Sale Actionهای کوچک/غیرعملی در
+        # برنامهٔ ۹۰روزه است. این فقط تجمیع گزارشی است؛ سقف تقاضا/ظرفیت
+        # هنوز روی شبکهٔ هفتگیِ زیرین محاسبه شده و اینجا دست‌نخورده
+        # می‌ماند. اگر جمعیت کافی برای رسیدن به کف واقعاً وجود نداشته
+        # باشد (مثلاً باقیماندهٔ آخر یک cohort)، آخرین دسته همچنان کوچک
+        # می‌ماند و صادقانه به‌عنوان استثنا علامت می‌خورد.
+        by_weight: dict[float, list] = {}
         for (ws, hw), s in sales.items():
-            note = ""
-            if s["qty"] < typ_min:
-                note = (f" — کمتر از بازهٔ معمول فروش ({typ_min:,.0f} تا "
-                        f"{typ_max:,.0f})؛ معمولاً استثنا/باقیماندهٔ carry-over")
-            src_txt = "، ".join(
-                f"{lb} ({sv['qty']:,.0f}{' · سهم جزئی' if sv['partial'] else ''})"
-                for lb, sv in s["sources"].items())
-            acts.append({
-                "date": ws.isoformat(), "type": "sale",
-                "title": f"فروش {s['qty']:,.0f} قطعه در {hw:g} گرم",
-                "detail": f"از {src_txt}" + note,
-                "quantity": s["qty"], "days": (ws - self.state.as_of).days,
-                "below_typical_range": s["qty"] < typ_min})
+            by_weight.setdefault(hw, []).append((ws, s))
+
+        acts_sale = []
+        for hw, entries in by_weight.items():
+            entries.sort(key=lambda e: e[0])
+            batch_qty, batch_sources, batch_start, batch_end = 0.0, {}, None, None
+            for ws, s in entries:
+                if batch_start is not None and batch_qty >= typ_min:
+                    self._flush_sale_batch(acts_sale, hw, batch_start, batch_end,
+                                           batch_qty, batch_sources, min_qty, typ_min, typ_max,
+                                           self.state.as_of)
+                    batch_qty, batch_sources, batch_start = 0.0, {}, None
+                if batch_start is None:
+                    batch_start = ws
+                batch_end = ws
+                batch_qty += s["qty"]
+                for lb, sv in s["sources"].items():
+                    b = batch_sources.setdefault(lb, {"qty": 0.0, "partial": False})
+                    b["qty"] += sv["qty"]
+                    b["partial"] = b["partial"] or sv["partial"]
+                if batch_qty >= typ_max:
+                    self._flush_sale_batch(acts_sale, hw, batch_start, batch_end,
+                                           batch_qty, batch_sources, min_qty, typ_min, typ_max,
+                                           self.state.as_of)
+                    batch_qty, batch_sources, batch_start = 0.0, {}, None
+            if batch_start is not None:
+                self._flush_sale_batch(acts_sale, hw, batch_start, batch_end,
+                                       batch_qty, batch_sources, min_qty, typ_min, typ_max,
+                                           self.state.as_of)
+        acts.extend(acts_sale)
 
         # خوراک
         for b in self.monthly[:4]:

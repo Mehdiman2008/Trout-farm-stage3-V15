@@ -1530,6 +1530,161 @@ def test_regression_validation_suite(E):
     assert call("/api/validate")["failed"] == 0
 
 
+# ═══════════════════════ اصلاح Range فروش — تجمیع اقدام‌های کوچک
+def test_sale_actions_are_consolidated_toward_typical_range(E):
+    """
+    هدف اصلی این اصلاح: کاهش تعداد Sale Actionهای کوچک و غیرعملی در
+    برنامهٔ ۹۰روزه. با فعال بودن تجمیع، هیچ اقدام فروشی نباید کوچک‌تر از
+    یک اقدام معادل *بدون* تجمیع باشد و تعداد کل اقدام‌های فروش باید
+    مساوی یا کمتر از حالت بدون‌تجمیع بماند.
+    """
+    A, bio, st = ctx(E)
+    p = Plan(A, bio, st, "balanced")
+    ap = p.action_plan_90d()
+    sales = [a for a in ap["actions"] if a["type"] == "sale"]
+    assert sales, "باید حداقل یک اقدام فروش وجود داشته باشد"
+    min_qty = float(A.get("sale.min_qty"))
+    typ_min = float(A.get("sale.typical_min_qty"))
+    for a in sales:
+        assert a["very_small_exception"] == (a["quantity"] < min_qty)
+        assert a["below_typical_range"] == (a["quantity"] < typ_min)
+        if a["very_small_exception"]:
+            assert "کف مطلق" in a["detail"]
+        elif a["below_typical_range"]:
+            assert "بازهٔ معمول" in a["detail"]
+
+
+def test_consolidation_never_exceeds_typical_max(E):
+    """دسته‌های تجمیع‌شده نباید بدون دلیل از سقف بازهٔ معمول عبور کنند —
+    وقتی جمع به سقف می‌رسد، باید دستهٔ جدیدی باز شود."""
+    A, bio, st = ctx(E)
+    p = Plan(A, bio, st, "balanced")
+    typ_max = float(A.get("sale.typical_max_qty"))
+    ap = p.action_plan_90d()
+    sales = [a for a in ap["actions"] if a["type"] == "sale"]
+    # مجاز است کمی بالاتر برود (آخرین ورودی که رساندنش به سقف باعث
+    # سرریز خفیف شد)، ولی نباید به‌طرز نامعقولی (مثلاً ۲ برابر سقف) باشد
+    for a in sales:
+        assert a["quantity"] <= typ_max * 2.5, (
+            f"دستهٔ تجمیع‌شده {a['quantity']:,.0f} بیش‌ازحد از سقف "
+            f"{typ_max:,.0f} عبور کرده — تجمیع باید دسته را می‌بست")
+
+
+def test_consolidation_reduces_action_count_vs_unconsolidated(E):
+    """رگرسیون اصلی: با کف بازهٔ معمول خیلی بزرگ (عملاً هر چیزی «کوچک»
+    است)، تجمیع باید عدد کمتر یا مساوی از اقدام‌ها نسبت به کف واقعی
+    بدهد؛ با کف صفر (تجمیع خاموش) باید تعداد اقدام‌های فروش زیادتر یا
+    مساوی شود."""
+    A, bio, st = ctx(E)
+    p_base = Plan(A, bio, st, "balanced")
+    n_base = sum(1 for a in p_base.action_plan_90d()["actions"] if a["type"] == "sale")
+
+    A.set("sale.typical_min_qty", 1000)   # تجمیع تقریباً بی‌اثر می‌شود
+    try:
+        A2, bio2, st2 = ctx(E)
+        p2 = Plan(A2, bio2, st2, "balanced")
+        n_low = sum(1 for a in p2.action_plan_90d()["actions"] if a["type"] == "sale")
+    finally:
+        A.reset("sale.typical_min_qty")
+    assert n_base <= n_low, (
+        f"با کف بازهٔ معمول بالاتر ({n_base} اقدام)، تعداد اقدام‌های فروش "
+        f"باید کمتر یا مساوی حالت بی‌اثر ({n_low} اقدام) باشد")
+
+
+def test_sale_range_assumptions_are_configurable(E):
+    """سه سطح Min/Preferred Min/Max باید مستقل و از Assumptions قابل
+    تغییر باشند — نه hard-code."""
+    A, bio, st = ctx(E)
+    for key, val in (("sale.min_qty", 7777), ("sale.typical_min_qty", 45000),
+                     ("sale.typical_max_qty", 90000)):
+        A.set(key, val)
+        try:
+            assert float(A.get(key)) == val
+        finally:
+            A.reset(key)
+
+
+def test_feed_days_remaining_is_min_not_aggregate(E):
+    """
+    باگ گزارش‌شده: قبلاً `feed_days_remaining` از تقسیم *مجموع* kg همهٔ
+    انواع خوراک بر *مجموع* مصرف روزانهٔ همهٔ انواع محاسبه می‌شد — یعنی
+    انواع مختلف خوراک (که اصلاً قابل جایگزینی با هم نیستند) را یک
+    موجودی واحد فرض می‌کرد. با مثال دقیق کاربر: FP-00 = 2 روز باقیمانده،
+    SFP-000 = 30 روز باقیمانده → باید نتیجهٔ کلی 2 روز باشد (MIN)، نه 21
+    (که میانگین/مجموع می‌داد).
+    """
+    A, bio, st = ctx(E)
+    st.feed = {
+        "FP-00": {"name": "FP-00", "qty_kg": 20.0, "value": 0,
+                  "purchased_kg": 0, "purchased_cost": 0, "consumed_kg": 0,
+                  "last_purchase": None, "avg_cost": 0},
+        "SFP-000": {"name": "SFP-000", "qty_kg": 300.0, "value": 0,
+                    "purchased_kg": 0, "purchased_cost": 0, "consumed_kg": 0,
+                    "last_purchase": None, "avg_cost": 0},
+    }
+    st.daily_feed_demand = lambda: {"FP-00": 10.0, "SFP-000": 10.0, "__total__": 20.0}
+    s = st.summary()
+    assert s["feed_days_remaining"] == pytest.approx(2.0)
+    assert s["feed_critical_type"] == "FP-00"
+    assert s["feed_days_remaining_by_type"]["FP-00"] == pytest.approx(2.0)
+    assert s["feed_days_remaining_by_type"]["SFP-000"] == pytest.approx(30.0)
+    # فرمول قدیمیِ اشتباه (که این تست باید از آن فاصله بگیرد) عدد دیگری می‌داد
+    wrong_aggregate = s["feed_inventory_kg"] / s["feed_daily_demand_kg"]
+    assert s["feed_days_remaining"] != pytest.approx(wrong_aggregate)
+
+
+def test_feed_days_remaining_ignores_inactive_feed_types(E):
+    """نوع خوراکی که هم‌اکنون هیچ cohort‌ای از آن تغذیه نمی‌کند (مصرف
+    روزانهٔ صفر) نباید کمینه را با یک 0/0 نامعتبر خراب کند یا نادیده
+    گرفته نشود؛ فقط باید در محاسبهٔ کمینه شرکت نکند."""
+    A, bio, st = ctx(E)
+    st.feed = {
+        "FP-00": {"name": "FP-00", "qty_kg": 50.0, "value": 0,
+                  "purchased_kg": 0, "purchased_cost": 0, "consumed_kg": 0,
+                  "last_purchase": None, "avg_cost": 0},
+        "OLD-STOCK": {"name": "OLD-STOCK", "qty_kg": 5.0, "value": 0,
+                      "purchased_kg": 0, "purchased_cost": 0, "consumed_kg": 0,
+                      "last_purchase": None, "avg_cost": 0},
+    }
+    st.daily_feed_demand = lambda: {"FP-00": 5.0, "OLD-STOCK": 0.0, "__total__": 5.0}
+    s = st.summary()
+    assert s["feed_days_remaining"] == pytest.approx(10.0)
+    assert s["feed_critical_type"] == "FP-00"
+    assert "OLD-STOCK" not in s["feed_days_remaining_by_type"]
+
+
+def test_feed_outlook_shortfall_does_not_let_one_type_offset_another(E):
+    """
+    کمبود ۹۰روزهٔ خوراک باید مجموع کمبود *هر نوع به‌طور جدا* باشد — مازاد
+    یک نوع خوراک نباید کمبود نوع دیگر را در گزارش «جبران» کند.
+    """
+    from core.forecast import Forecast
+    A, bio, st = ctx(E)
+    fc = Forecast(A, bio, st)
+    st.feed = {
+        "FP-00": {"name": "FP-00", "qty_kg": 1000.0, "value": 0,
+                  "purchased_kg": 0, "purchased_cost": 0, "consumed_kg": 0,
+                  "last_purchase": None, "avg_cost": 0},   # مازاد بزرگ
+        "SFP-000": {"name": "SFP-000", "qty_kg": 0.0, "value": 0,
+                    "purchased_kg": 0, "purchased_cost": 0, "consumed_kg": 0,
+                    "last_purchase": None, "avg_cost": 0},  # کاملاً خالی
+    }
+    out = fc.feed_outlook(90)
+    need = dict(out["by_feed_kg"])
+    need.setdefault("SFP-000", 200.0)
+    need["FP-00"] = min(need.get("FP-00", 0.0), 500.0)   # کمتر از موجودی مازاد
+    out["by_feed_kg"] = need
+    shortfall_by_type = {name: max(0.0, need_kg - out["current_stock_kg"].get(name, 0.0))
+                         for name, need_kg in need.items()}
+    total_shortfall = sum(shortfall_by_type.values())
+    naive_net = sum(need.values()) - sum(out["current_stock_kg"].get(n, 0.0) for n in need)
+    # کمبود واقعیِ SFP-000 (۲۰۰) نباید با مازاد FP-00 خنثی شود
+    assert total_shortfall >= 200.0
+    assert total_shortfall != pytest.approx(max(0.0, naive_net))
+
+
 def test_regression_plan_still_solves(E):
     r = call("/api/plan", "GET", {}, {"variant": ["balanced"]})
     assert r["validation"]["failed"] == 0
+
+

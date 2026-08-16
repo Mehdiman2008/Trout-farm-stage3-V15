@@ -681,8 +681,21 @@ class FarmState:
         op_used = len([p for p in ponds if p["role"] == "operational" and p["count"] > 0])
         res_used = len([p for p in ponds if p["role"] == "reserve" and p["count"] > 0])
         feed_kg = sum(f["qty_kg"] for f in self.feed.values())
-        demand = self.daily_feed_demand()["__total__"]
-        days_left = (feed_kg / demand) if demand > 0 else None
+        demand_by_type = self.daily_feed_demand()
+        demand = demand_by_type["__total__"]
+        # هر نوع خوراک باید کاملاً جداگانه محاسبه شود — جمع‌کردن kg چند
+        # نوع خوراک مختلف و تقسیم بر جمع نیاز روزانه، انگار همه یک
+        # موجودی قابل‌جایگزین‌اند (اشتباه: FP-00 با SFP-000 قابل تعویض
+        # نیست). روزهای باقیمانده کلی = کمینهٔ روزهای باقیماندهٔ هر نوع
+        # فعال (نوعی که هم‌اکنون مصرف دارد)، نه مجموع/میانگین آن‌ها.
+        per_type_days = {}
+        for name, need_kg in demand_by_type.items():
+            if name == "__total__" or need_kg <= 1e-9:
+                continue
+            stock_kg = self.feed.get(name, {}).get("qty_kg", 0.0)
+            per_type_days[name] = stock_kg / need_kg
+        days_left = min(per_type_days.values()) if per_type_days else None
+        critical_feed = min(per_type_days, key=per_type_days.get) if per_type_days else None
         ponds_req = sum(self.bio.ponds_required(c.alive, c.mean_weight)
                         for c in self.cohorts.values())
         return {
@@ -698,6 +711,8 @@ class FarmState:
             "feed_inventory_kg": feed_kg,
             "feed_daily_demand_kg": demand,
             "feed_days_remaining": days_left,
+            "feed_critical_type": critical_feed,
+            "feed_days_remaining_by_type": per_type_days,
             "stock_value": sum(c.alive * self.bio.sale_price(c.mean_weight)
                                for c in self.cohorts.values()),
             "eggs_purchased_total": sum(c.egg_count for c in self.cohorts.values()),

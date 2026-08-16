@@ -486,7 +486,8 @@ function renderKpis() {
       k: s.ponds_required_now > s.operational_ponds_total ? "alert" : "" },
     { l: "زیست‌توده کل", v: n0(s.total_biomass_kg), u: "kg", f: "تخمینی" },
     { l: "موجودی خوراک", v: n0(s.feed_inventory_kg), u: "kg",
-      f: feedDays === null ? "مصرف روزانه صفر" : `≈ ${n0(feedDays)} روز مصرف`,
+      f: feedDays === null ? "مصرف روزانه صفر"
+        : `${s.feed_critical_type || ""} — ${n0(feedDays)} روز باقی مانده`,
       k: (feedDays !== null && feedDays < 14) ? "warn" : "" },
     { l: "ارزش موجودی زنده", v: money(s.stock_value), u: "تومان",
       f: "به قیمت روز همان وزن" },

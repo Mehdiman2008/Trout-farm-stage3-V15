@@ -184,9 +184,15 @@ class Forecast:
                 total_kg += kg
                 total_cost += kg * bio.feed_price(w0)
         stock = {k: v["qty_kg"] for k, v in st.feed.items()}
+        # هر نوع خوراک جداگانه: کمبود یک نوع را نمی‌توان با موجودی مازاد
+        # نوع دیگر جبران کرد — پس کمبود کل باید جمع کمبودهای *مثبت* هر
+        # نوع باشد، نه تفاضل مجموع نیاز از مجموع موجودی.
+        shortfall_by_type = {name: max(0.0, need_kg - stock.get(name, 0.0))
+                             for name, need_kg in need.items()}
         return {"days": days, "by_feed_kg": need, "total_kg": total_kg,
                 "total_cost": total_cost, "current_stock_kg": stock,
-                "shortfall_kg": max(0.0, total_kg - sum(stock.values()))}
+                "shortfall_by_feed_kg": shortfall_by_type,
+                "shortfall_kg": sum(shortfall_by_type.values())}
 
     # ----------------------------------------------------------- revenue
     def revenue_outlook(self) -> dict:

@@ -138,8 +138,11 @@ ENGINE: Engine | None = None
 # =================================================================== routes
 def api(path: str, method: str, query: dict, body: dict):
     E = ENGINE
+    # Lightweight Railway health check: avoid rebuilding full farm state.
     if path == "/api/health" and method == "GET":
-        return {"ok": True, "service": "trout-farm", "optimizer": solver_status()}
+        return {"ok": True, "service": "trout-farm",
+                "optimizer": solver_status(),
+                "fx_provider": "navasan-api" if os.getenv("NAVASAN_API_KEY") else "historical/manual"}
     if method == "POST" and not path.startswith("/api/decide"):
         # هر نوشتنی (تراکنش، فرضیه، تخصیص و…) می‌تواند برنامه بهینه را عوض
         # کند؛ cache برنامه‌ها پاک می‌شود تا نتیجه همیشه از وضعیت تازه باشد.
@@ -1005,13 +1008,17 @@ class Handler(BaseHTTPRequestHandler):
 def main():
     global ENGINE
     ap = argparse.ArgumentParser()
-    # Railway injects PORT. Local execution keeps the original 8000/127.0.0.1 defaults.
+    # Railway injects PORT. Local defaults remain unchanged when env vars are absent.
     ap.add_argument("--port", type=int, default=int(os.getenv("PORT", "8000")))
     ap.add_argument("--host", default=os.getenv("HOST", "0.0.0.0" if os.getenv("RAILWAY_ENVIRONMENT") else "127.0.0.1"))
     ap.add_argument("--db", default=os.getenv("DATABASE_PATH", DEFAULT_DB))
     ap.add_argument("--seed-demo", action="store_true")
     ap.add_argument("--reset", action="store_true", help="حذف پایگاه داده و شروع از نو")
     args = ap.parse_args()
+
+    db_dir = os.path.dirname(os.path.abspath(args.db))
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
 
     if args.reset and os.path.exists(args.db):
         os.remove(args.db)

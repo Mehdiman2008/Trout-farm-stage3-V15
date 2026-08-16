@@ -14,12 +14,8 @@ import os
 import sqlite3
 from datetime import datetime, timezone
 
-DEFAULT_DB = os.getenv(
-    "DATABASE_PATH",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "farm.db"),
-)
-# Railway persistent volumes commonly mount at /data. Ensure the selected DB directory exists.
-os.makedirs(os.path.dirname(os.path.abspath(DEFAULT_DB)), exist_ok=True)
+DEFAULT_DB = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                          "data", "farm.db")
 
 # انواع تراکنش مجاز
 TXN_TYPES = [
