@@ -973,7 +973,7 @@ function renderCapacity() {
 /* ============================================================ timeline */
 function renderTimeline() {
   const rows = DATA.timeline, svg = $("#timeline");
-  if (!rows.length) { svg.innerHTML = ""; return; }
+  if (!rows.length) { svg.innerHTML = ""; TL_STATE = null; return; }
   const H = Math.max(120, 46 + rows.length * 34), W = 900,
         m = { t: 26, r: 20, b: 24, l: 118 };
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
@@ -1012,6 +1012,102 @@ function renderTimeline() {
       text-anchor="middle">${jdate(d.toISOString().slice(0, 10))}</text>`;
   }
   svg.innerHTML = s;
+
+  // ---- لایهٔ تعاملی «Selected Date» — طراحی/منطق بالا دست‌نخورده ماند،
+  // فقط این overlay روی همان چارت اضافه شده (بدون هیچ کتابخانهٔ جدید).
+  TL_STATE = { t0, span, m, W, H, rows, X };
+  svg.insertAdjacentHTML("beforeend", `<g id="tlSel" style="display:none;pointer-events:none">
+      <line id="tlSelLine" x1="0" y1="${m.t - 12}" x2="0" y2="${H - m.b}"
+        stroke="var(--gold)" stroke-width="1.6"/>
+      <text id="tlSelLabel" x="0" y="${m.t - 16}" font-size="10.5" font-weight="700"
+        fill="var(--gold)" text-anchor="middle"></text>
+      ${rows.map((r, i) => `<text class="tlSelW" data-row="${i}" x="0"
+        y="${m.t + i * 34 + 12 + 3}" font-size="9.5" font-weight="700"
+        fill="var(--gold)" text-anchor="middle"></text>`).join("")}
+    </g>`);
+  bindTimelineInteraction(svg);
+}
+let TL_STATE = null;
+let TL_PINNED = false;
+
+function tlSvgX(svg, evt) {
+  const pt = svg.createSVGPoint();
+  pt.x = evt.clientX; pt.y = evt.clientY;
+  const inv = svg.getScreenCTM().inverse();
+  return pt.matrixTransform(inv).x;
+}
+
+function tlDateFromX(svgX) {
+  const { t0, span, m, W } = TL_STATE;
+  const frac = (svgX - m.l) / (W - m.l - m.r);
+  const clamped = Math.max(0, Math.min(1, frac));
+  return new Date(+t0 + span * clamped);
+}
+
+// درون‌یابی خطی سبک بین milestoneهای شناخته‌شدهٔ همان cohort (فقط برای
+// نمایش در تعامل؛ هیچ منطق تصمیم‌گیری جدیدی نیست) — همان marks که خودِ
+// چارت از قبل رسم می‌کند، دوباره استفاده می‌شوند.
+function tlEstimateWeight(row, date) {
+  const t = +date;
+  const purchaseT = +new Date(row.purchase_date);
+  if (t < purchaseT) return null;    // هنوز این cohort خریداری نشده بود
+  const knots = [{ t: purchaseT, w: 0 },
+                 ...row.marks.map(k => ({ t: +new Date(k.date), w: k.weight_g }))]
+    .sort((a, b) => a.t - b.t);
+  const last = knots[knots.length - 1];
+  if (t >= last.t) return `${last.w}+`;
+  for (let i = 0; i < knots.length - 1; i++) {
+    const a = knots[i], b = knots[i + 1];
+    if (t >= a.t && t <= b.t) {
+      const f = (b.t - a.t) > 0 ? (t - a.t) / (b.t - a.t) : 0;
+      return (a.w + (b.w - a.w) * f).toFixed(1);
+    }
+  }
+  return last.w;
+}
+
+function tlUpdateSelection(svgX) {
+  const { rows } = TL_STATE;
+  const d = tlDateFromX(svgX);
+  const iso = d.toISOString().slice(0, 10);
+  const g = $("#tlSel");
+  g.style.display = "";
+  $("#tlSelLine").setAttribute("x1", svgX);
+  $("#tlSelLine").setAttribute("x2", svgX);
+  $("#tlSelLabel").setAttribute("x", svgX);
+  $("#tlSelLabel").textContent = jdate(iso);
+  $$(".tlSelW").forEach(el => {
+    const r = rows[+el.dataset.row];
+    const w = tlEstimateWeight(r, d);
+    el.setAttribute("x", svgX);
+    el.textContent = w === null ? "" : `${w}g`;
+  });
+}
+
+function bindTimelineInteraction(svg) {
+  if (svg.dataset.tlBound) return;    // فقط یک‌بار listener وصل شود
+  svg.dataset.tlBound = "1";
+  TL_PINNED = false;
+
+  const onMove = evt => {
+    if (!TL_STATE) return;
+    const x = tlSvgX(svg, evt);
+    if (x < TL_STATE.m.l || x > TL_STATE.W - TL_STATE.m.r) return;
+    tlUpdateSelection(x);
+  };
+  // حرکت موس روی Timeline و درگ افقی هر دو همین یک رویداد را دارند —
+  // خط همیشه دنبال نشانگر می‌آید، چه دکمه پایین باشد چه نباشد.
+  svg.addEventListener("mousemove", onMove);
+  svg.addEventListener("mouseleave", () => {
+    if (!TL_PINNED && $("#tlSel")) $("#tlSel").style.display = "none";
+  });
+  // Click: تاریخ انتخابی را «سنجاق» می‌کند تا با دورشدن موس هم باقی
+  // بماند (برای خواندن راحت‌تر برچسب‌ها)؛ کلیک دوباره باز می‌کند.
+  svg.addEventListener("click", evt => {
+    TL_PINNED = !TL_PINNED;
+    onMove(evt);
+    if (!TL_PINNED) $("#tlSel").style.display = "none";
+  });
 }
 
 /* =========================================================== milestones */
